@@ -1,0 +1,105 @@
+syntax = "proto3";
+package customers;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+message VersionRequest {
+}
+
+message VersionResponse {
+    string version = 1;
+}
+
+message User {
+    string id = 1;
+    string signup_auth_id = 2;
+    string status = 3;
+    string email = 5;
+    UserProfile profile = 6;
+
+   google.protobuf.Timestamp  signed_up_at = 7;
+   google.protobuf.Timestamp last_login_at = 8;
+}
+
+message UserProfile {
+    string name = 1;
+    string given_name = 2;
+}
+
+message UserStatus {
+    string status = 2;
+}
+
+message Organization {
+    string id = 1;
+    string name = 2;
+}
+
+
+// Information for login is passed by API Gateway as header
+message LoginRequest {}
+
+message LoginResponse {
+    User user = 1;
+}
+
+
+// Information for registration is passed by API Gateway as header
+// An organization will be created for the user and the user will be made the owner
+message RegisterRequest {}
+
+message RegisterUserResponse {
+    User user = 1;
+    UserStatus status = 2;
+    Organization organization = 3;
+}
+
+message GetOrganizationRequest {}
+
+
+message UpdateOrganizationRequest {
+    string name = 1;
+    string domain = 2;
+}
+
+message UpdateOrganizationResponse {
+    Organization org = 1;
+}
+
+service BackendService {
+
+    rpc Version(VersionRequest) returns (VersionResponse) {
+        option (google.api.http) = {
+            get: "/version"
+        };
+    }
+
+    rpc Register(RegisterRequest) returns (RegisterUserResponse) {
+      option (google.api.http) = {
+          post: "/register"
+      };
+    }
+
+    rpc Login(LoginRequest) returns (LoginResponse) {
+        option (google.api.http) = {
+            post: "/login"
+        };
+    }
+
+    // Organization for the authenticated user
+    rpc GetOrganization(GetOrganizationRequest) returns (Organization) {
+        option (google.api.http) = {
+            get: "/organization"
+        };
+    }
+
+    // Organization for the authenticated user
+    rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse) {
+        option (google.api.http) = {
+            post: "/organization"
+            body: "*"
+        };
+    }
+
+}
