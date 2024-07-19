@@ -1,0 +1,1 @@
+[![CI](https://github.com/codefly-dev/module-user-management-go-grpc/actions/workflows/workflows.yaml/badge.svg)](https://github.com/codefly-dev/module-user-management-go-grpc/actions/workflows/workflows.yaml)
