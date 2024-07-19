@@ -1,0 +1,27 @@
+name: 'Run Codefly CI Test'
+description: 'Runs Codefly CI test inside a Docker container'
+inputs:
+  subfolder:
+    description: 'Subfolder within the workspace'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - run: |
+        if [ "${{ inputs.subfolder }}" != "" ]; then
+        WORKDIR="$GITHUB_WORKSPACE/${{ inputs.subfolder }}"
+        else
+        WORKDIR="$GITHUB_WORKSPACE"
+        fi
+        set -e  # Exit immediately if a command exits with a non-zero status
+        docker run \
+        -v $WORKDIR:$WORKDIR \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -w $WORKDIR \
+        docker.io/codeflydev/codefly:0.0.1 \
+        codefly ci test
+      shell: bash
+branding:
+  icon: 'mic'
+  color: 'blue'
