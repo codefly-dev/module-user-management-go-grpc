@@ -23,7 +23,6 @@ import (
 	"backend/pkg/adapters"
 	"context"
 	"fmt"
-	"os"
 	"os/signal"
 	"syscall"
 
@@ -57,7 +56,6 @@ func main() {
 		panic(err)
 
 	}
-	fmt.Println(os.Environ())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

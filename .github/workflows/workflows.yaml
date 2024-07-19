@@ -1,0 +1,15 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  run-codefly-ci-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Run Codefly CI Test
+        uses: codefly-dev/core@v0.1.132
+        with:
+          action: .actions/ci/test.yaml

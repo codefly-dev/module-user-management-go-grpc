@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/bufbuild/protovalidate-go v0.6.3
-	github.com/codefly-dev/core v0.1.129
+	github.com/codefly-dev/core v0.1.131
 	github.com/codefly-dev/sdk-go v0.1.34
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0
