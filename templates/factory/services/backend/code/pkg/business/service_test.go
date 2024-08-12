@@ -30,7 +30,9 @@ func TestUser(t *testing.T) {
 	ctx := context.Background()
 	wool.SetGlobalLogLevel(wool.DEBUG)
 
-	deps, err := cli.WithDependencies(ctx, cli.WithDebug(), cli.WithNamingScope("test"), cli.WithTimeout(30*time.Second))
+	deps, err := cli.WithDependencies(ctx, cli.WithDebug(),
+		cli.WithNamingScope("test"), cli.WithTimeout(30*time.Second),
+		cli.WithSilence("store"))
 	require.NoError(t, err)
 
 	defer func() {
@@ -52,13 +54,13 @@ func TestUser(t *testing.T) {
 		Email:        email,
 	}
 
-	_, err = service.DeleteUser(ctx, authID)
+	_, err = service.DeleteOwner(ctx, authID)
 	require.NoError(t, err)
 
-	resp, err := service.RegisterUser(ctx, u)
+	respRegisterUser, err := service.RegisterUser(ctx, u)
 	require.NoError(t, err)
-	require.Equal(t, email, resp.User.Email)
-	require.Equal(t, business.DefaultOrganizationName, resp.Organization.Name)
+	require.Equal(t, email, respRegisterUser.User.Email)
+	require.Equal(t, business.DefaultOrganizationName, respRegisterUser.Organization.Name)
 
 	userBack, err := service.GetUserByAuthID(ctx, authID)
 	require.NoError(t, err)
@@ -68,6 +70,11 @@ func TestUser(t *testing.T) {
 	org, err := service.GetOrganizationForOwner(ctx, u)
 	require.NoError(t, err)
 	require.Equal(t, org.Name, business.DefaultOrganizationName)
+
+	teams, err := service.GetTeams(ctx, org)
+	require.NoError(t, err)
+	require.Len(t, teams, 1)
+	require.Equal(t, teams[0].Name, "Administrators")
 
 	// Try the REST API
 	adapters.WithService(service)

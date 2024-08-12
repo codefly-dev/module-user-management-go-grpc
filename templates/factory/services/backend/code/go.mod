@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/bufbuild/protovalidate-go v0.6.3
-	github.com/codefly-dev/core v0.1.131
+	github.com/codefly-dev/core v0.1.132
 	github.com/codefly-dev/sdk-go v0.1.34
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0
@@ -64,7 +64,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/crypto v0.25.0 // indirect
-	golang.org/x/exp v0.0.0-20240716175740-e3f259677ff7 // indirect
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect

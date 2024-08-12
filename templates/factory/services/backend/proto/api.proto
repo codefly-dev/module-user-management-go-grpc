@@ -37,6 +37,64 @@ message Organization {
 }
 
 
+message Team {
+    string id = 1;
+    string name = 2;
+    repeated User members = 3; // List of users in the team
+}
+
+message Permission {
+    string id = 1;
+    string team_id = 2; // Associated team ID
+    string resource = 3; // Resource to which the permission applies
+    string role = 4;     // Role within the team (e.g., "admin", "member")
+}
+
+message CreateTeamRequest {
+    string name = 1;
+}
+
+message CreateTeamResponse {
+    Team team = 1;
+}
+
+message AddUserToTeamRequest {
+    string team_id = 1;
+    string user_id = 2;
+}
+
+message AddUserToTeamResponse {
+    Team team = 1;
+}
+
+message RemoveUserFromTeamRequest {
+    string team_id = 1;
+    string user_id = 2;
+}
+
+message RemoveUserFromTeamResponse {
+    Team team = 1;
+}
+
+message AssignPermissionRequest {
+    string team_id = 1;
+    Permission permission = 2;
+}
+
+message AssignPermissionResponse {
+    Permission permission = 1;
+}
+
+message RevokePermissionRequest {
+    string team_id = 1;
+    string permission_id = 2;
+}
+
+message RevokePermissionResponse {
+    Permission permission = 1;
+}
+
+
 // Information for login is passed by API Gateway as header
 message LoginRequest {}
 
@@ -66,6 +124,8 @@ message UpdateOrganizationRequest {
 message UpdateOrganizationResponse {
     Organization org = 1;
 }
+
+
 
 service BackendService {
 
@@ -99,6 +159,41 @@ service BackendService {
         option (google.api.http) = {
             post: "/organization"
             body: "*"
+        };
+    }
+
+    // Create a team
+    rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse) {
+        option (google.api.http) = {
+            post: "/teams"
+        };
+    }
+
+    // Add a user to a team
+    rpc AddUserToTeam(AddUserToTeamRequest) returns (AddUserToTeamResponse) {
+        option (google.api.http) = {
+            post: "/teams/add_user"
+        };
+    }
+
+    // Remove a user from a team
+    rpc RemoveUserFromTeam(RemoveUserFromTeamRequest) returns (RemoveUserFromTeamResponse) {
+        option (google.api.http) = {
+            post: "/teams/remove_user"
+        };
+    }
+
+    // Assign a permission to a team
+    rpc AssignPermission(AssignPermissionRequest) returns (AssignPermissionResponse) {
+        option (google.api.http) = {
+            post: "/permissions/assign"
+        };
+    }
+
+    // Revoke a permission from a team
+    rpc RevokePermission(RevokePermissionRequest) returns (RevokePermissionResponse) {
+        option (google.api.http) = {
+            post: "/permissions/revoke"
         };
     }
 

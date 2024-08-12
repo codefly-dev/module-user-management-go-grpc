@@ -29,6 +29,17 @@ type Store interface {
 
 	GetOrganizationForOwner(ctx context.Context, user *gen.User) (*gen.Organization, error)
 
-	CreateOrganization(ctx context.Context, owner *gen.User, in *gen.Organization) (*gen.Organization, error)
+	CreateOrganization(ctx context.Context, owner *gen.User, org *gen.Organization) (*gen.Organization, error)
+
 	DeleteOrganization(ctx context.Context, org *gen.Organization) error
+
+	// Teams
+
+	CreateTeam(ctx context.Context, org *gen.Organization, team *gen.Team) (*gen.Team, error)
+
+	GetTeams(ctx context.Context, org *gen.Organization) ([]*gen.Team, error)
+
+	// Add user to team
+
+	AddUserToTeam(ctx context.Context, team *gen.Team, user *gen.User) error
 }

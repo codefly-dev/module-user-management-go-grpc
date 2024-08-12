@@ -19,7 +19,7 @@ func Simple(ctx context.Context, service *business.Service) error {
 		Email:        email,
 	}
 
-	_, err := service.DeleteUser(ctx, authID)
+	_, err := service.DeleteOwner(ctx, authID)
 	if err != nil {
 		return w.Wrapf(err, "cannot delete user")
 	}

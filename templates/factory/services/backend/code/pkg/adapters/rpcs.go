@@ -108,3 +108,28 @@ func (s *GrpcServer) Register(ctx context.Context, req *gen.RegisterRequest) (*g
 	}
 	return resp, nil
 }
+
+func (s *GrpcServer) CreateTeam(ctx context.Context, req *gen.CreateTeamRequest) (*gen.CreateTeamResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *GrpcServer) AddUserToTeam(ctx context.Context, req *gen.AddUserToTeamRequest) (*gen.AddUserToTeamResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *GrpcServer) RemoveUserFromTeam(ctx context.Context, req *gen.RemoveUserFromTeamRequest) (*gen.RemoveUserFromTeamResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *GrpcServer) AssignPermission(ctx context.Context, req *gen.AssignPermissionRequest) (*gen.AssignPermissionResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *GrpcServer) RevokePermission(ctx context.Context, req *gen.RevokePermissionRequest) (*gen.RevokePermissionResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}

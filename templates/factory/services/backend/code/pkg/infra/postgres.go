@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 
 	codefly "github.com/codefly-dev/sdk-go"
@@ -29,10 +30,15 @@ type PostgresStore struct {
 var _ business.Store = (*PostgresStore)(nil)
 
 func (p *PostgresStore) CreateUser(ctx context.Context, user *gen.User) (*gen.User, error) {
+	id, err := uuid.NewUUID()
+	if err != nil {
+		return nil, err
+	}
+	user.Id = id.String()
 	now := time.Now()
 	sql := `INSERT INTO users (id, status, auth_signup_id, signed_up_at, email, profile) VALUES ($1, $2, $3, $4, $5, $6)`
 	args := []any{user.Id, user.Status, user.SignupAuthId, now, user.Email, user.Profile}
-	_, err := p.pool.Exec(ctx, sql, args...)
+	_, err = p.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,9 +83,14 @@ func (p *PostgresStore) GetOrganizationForOwner(ctx context.Context, user *gen.U
 }
 
 func (p *PostgresStore) CreateOrganization(ctx context.Context, owner *gen.User, org *gen.Organization) (*gen.Organization, error) {
+	id, err := uuid.NewUUID()
+	if err != nil {
+		return nil, err
+	}
+	org.Id = id.String()
 	sql := `INSERT INTO organizations (id, name, owner) VALUES ($1, $2, $3)`
 	args := []any{org.Id, org.Name, owner.Id}
-	_, err := p.pool.Exec(ctx, sql, args...)
+	_, err = p.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +117,51 @@ func (p *PostgresStore) DeleteUser(ctx context.Context, authSignupId string) (*g
 		return nil, err
 	}
 	return u, nil
+}
+
+func (p *PostgresStore) CreateTeam(ctx context.Context, org *gen.Organization, team *gen.Team) (*gen.Team, error) {
+	id, err := uuid.NewUUID()
+	if err != nil {
+		return nil, err
+	}
+	team.Id = id.String()
+	sql := `INSERT INTO teams (id, name, organization_id) VALUES ($1, $2, $3)`
+	args := []any{team.Id, team.Name, org.Id}
+	_, err = p.pool.Exec(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return team, nil
+}
+
+func (p *PostgresStore) GetTeams(ctx context.Context, org *gen.Organization) ([]*gen.Team, error) {
+	sql := `SELECT id, name FROM teams WHERE organization_id = $1`
+	rows, err := p.pool.Query(ctx, sql, org.Id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var teams []*gen.Team
+	for rows.Next() {
+		var team gen.Team
+		err := rows.Scan(&team.Id, &team.Name)
+		if err != nil {
+			return nil, err
+		}
+		teams = append(teams, &team)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return teams, nil
+}
+
+func (p *PostgresStore) AddUserToTeam(ctx context.Context, team *gen.Team, user *gen.User) error {
+	sql := `INSERT INTO team_users (team_id, user_id) VALUES ($1, $2)`
+	args := []any{team.Id, user.Id}
+	_, err := p.pool.Exec(ctx, sql, args...)
+	return err
 }
 
 func NewPostgresStore(ctx context.Context) (*PostgresStore, error) {

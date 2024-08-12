@@ -4,6 +4,7 @@ import (
 	"backend/pkg/gen"
 	"context"
 	"fmt"
+	"github.com/codefly-dev/core/wool"
 	"slices"
 
 	"github.com/google/uuid"
@@ -11,12 +12,18 @@ import (
 
 type Status string
 
+func (s *Service) SetStore(store Store) {
+	s.store = store
+}
+
 const (
 	Active  Status = "active"
 	Pending Status = "pending"
 )
 
 const DefaultOrganizationName = "My Organization"
+
+const AdminTeamName = "Administrators"
 
 type Service struct {
 	store Store
@@ -27,6 +34,7 @@ func NewService(store Store) (*Service, error) {
 }
 
 func (s *Service) RegisterUser(ctx context.Context, user *gen.User) (*gen.RegisterUserResponse, error) {
+	w := wool.Get(ctx).In("RegisterUser")
 	// Invitation only
 	if slices.Contains(invited, user.Email) {
 		user.Status = string(Active)
@@ -35,23 +43,40 @@ func (s *Service) RegisterUser(ctx context.Context, user *gen.User) (*gen.Regist
 	}
 	// If already exists, fails
 	if u, err := s.store.GetUserByAuthID(ctx, user.SignupAuthId); err != nil {
-		return nil, err
+		return nil, w.Wrapf(err, "error getting user")
 	} else if u != nil {
-		return nil, fmt.Errorf("user already exists: %s", user.Email)
+		return nil, w.NewError("user already exists: %s", user.Email)
 	}
-	id, err := uuid.NewUUID()
-	if err != nil {
-		return nil, fmt.Errorf("error generating user id: %w", err)
-	}
-	user.Id = id.String()
+
 	u, err := s.store.CreateUser(ctx, user)
 	if err != nil {
-		return nil, err
+		return nil, w.Wrapf(err, "error creating user")
 	}
+	if u == nil {
+		return nil, w.NewError("error creating user")
+	}
+
 	// Create organization
-	org, err := s.CreateOrganization(ctx, u)
+	org, err := s.CreateOrganization(ctx, u, &gen.Organization{Name: DefaultOrganizationName})
 	if err != nil {
-		return nil, err
+		return nil, w.Wrapf(err, "error creating organization")
+	}
+	if org == nil {
+		return nil, w.NewError("error creating organization")
+	}
+
+	// Create Admin Team
+	team, err := s.store.CreateTeam(ctx, org, &gen.Team{Name: AdminTeamName})
+	if err != nil {
+		return nil, w.Wrapf(err, "error creating team")
+	}
+	// Add Admin permissions this team
+	// TODO
+
+	// Adding the User to this team
+	err = s.store.AddUserToTeam(ctx, team, u)
+	if err != nil {
+		return nil, w.Wrapf(err, "error adding user to team")
 	}
 	return &gen.RegisterUserResponse{
 		User:         u,
@@ -68,23 +93,22 @@ func (s *Service) GetOrganizationForOwner(ctx context.Context, u *gen.User) (*ge
 }
 
 // CreateOrganization creates an organization for the user
-func (s *Service) CreateOrganization(ctx context.Context, u *gen.User) (*gen.Organization, error) {
-	// Check if we already have a organization owned by this user
-	org, err := s.store.GetOrganizationForOwner(ctx, u)
+func (s *Service) CreateOrganization(ctx context.Context, u *gen.User, org *gen.Organization) (*gen.Organization, error) {
+	w := wool.Get(ctx).In("CreateOrganization")
+	// Check if we already have an organization owned by this user
+	exists, err := s.store.GetOrganizationForOwner(ctx, u)
 	if err != nil {
-		return nil, fmt.Errorf("error getting organization: %w", err)
+		return nil, w.Wrapf(err, "error getting organization")
 	}
-	if org != nil {
-		return nil, fmt.Errorf("organization already exists: %s", u.Email)
+	if exists != nil {
+		return nil, w.NewError("organization already exists")
 	}
+	// Otherwise, create it
 	orgID, err := uuid.NewUUID()
 	if err != nil {
 		return nil, fmt.Errorf("error generating organization id: %w", err)
 	}
-	org = &gen.Organization{
-		Id:   orgID.String(),
-		Name: DefaultOrganizationName,
-	}
+	org.Id = orgID.String()
 	org, err = s.store.CreateOrganization(ctx, u, org)
 	if err != nil {
 		return nil, fmt.Errorf("error creating organization: %w", err)
@@ -92,32 +116,35 @@ func (s *Service) CreateOrganization(ctx context.Context, u *gen.User) (*gen.Org
 	return org, nil
 }
 
-func (s *Service) SetStore(store Store) {
-	s.store = store
-}
-
-func (s *Service) DeleteUser(ctx context.Context, authSignupId string) (*gen.User, error) {
-	u, err := s.store.DeleteUser(ctx, authSignupId)
+func (s *Service) DeleteOwner(ctx context.Context, authSignupId string) (*gen.User, error) {
+	w := wool.Get(ctx).In("DeleteOwner")
+	u, err := s.GetUserByAuthID(ctx, authSignupId)
 	if err != nil {
-		return nil, fmt.Errorf("error deleting user: %w", err)
+		return nil, w.Wrapf(err, "error getting user")
 	}
 	if u == nil {
 		return nil, nil
 	}
-	// Delete organization for the user
 	org, err := s.GetOrganizationForOwner(ctx, u)
 	if err != nil {
 		return u, fmt.Errorf("error getting organization: %w", err)
 	}
-	if org == nil {
-		return u, nil
+	if org != nil {
+		err = s.DeleteOrganization(ctx, org)
+		if err != nil {
+			return u, fmt.Errorf("error deleting organization: %w", err)
+		}
 	}
-	err = s.DeleteOrganization(ctx, org)
-	return u, err
+	return s.store.DeleteUser(ctx, authSignupId)
 }
 
 func (s *Service) DeleteOrganization(ctx context.Context, org *gen.Organization) error {
 	return s.store.DeleteOrganization(ctx, org)
+}
+
+func (s *Service) GetTeams(ctx context.Context, org *gen.Organization) ([]*gen.Team, error) {
+	return s.store.GetTeams(ctx, org)
+
 }
 
 // Right now hardcode email of invited users
