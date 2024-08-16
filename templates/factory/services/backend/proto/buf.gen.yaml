@@ -5,6 +5,7 @@ managed:
     default: backend/pkg/gen
     except:
       - buf.build/googleapis/googleapis
+      - buf.build/bufbuild/protovalidate
 plugins:
   - plugin: buf.build/protocolbuffers/go
     out: ../code/pkg/gen

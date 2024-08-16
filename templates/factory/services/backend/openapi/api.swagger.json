@@ -33,14 +33,24 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/customersLoginRequest"
+            }
+          }
+        ],
         "tags": [
           "BackendService"
         ]
       }
     },
-    "/organization": {
+    "/organizations/{orgId}": {
       "get": {
-        "summary": "Organization for the authenticated user",
+        "summary": "Organization management",
         "operationId": "BackendService_GetOrganization",
         "responses": {
           "200": {
@@ -56,18 +66,64 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
         "tags": [
           "BackendService"
         ]
       },
-      "post": {
-        "summary": "Organization for the authenticated user",
+      "put": {
         "operationId": "BackendService_UpdateOrganization",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/customersUpdateOrganizationResponse"
+              "$ref": "#/definitions/customersOrganization"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackendServiceUpdateOrganizationBody"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/permissions": {
+      "post": {
+        "summary": "Permission and Role management",
+        "operationId": "BackendService_CreatePermission",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersPermission"
             }
           },
           "default": {
@@ -83,103 +139,8 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/customersUpdateOrganizationRequest"
+              "$ref": "#/definitions/customersCreatePermissionRequest"
             }
-          }
-        ],
-        "tags": [
-          "BackendService"
-        ]
-      }
-    },
-    "/permissions/assign": {
-      "post": {
-        "summary": "Assign a permission to a team",
-        "operationId": "BackendService_AssignPermission",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/customersAssignPermissionResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "teamId",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "permission.id",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "permission.teamId",
-            "description": "Associated team ID",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "permission.resource",
-            "description": "Resource to which the permission applies",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "permission.role",
-            "description": "Role within the team (e.g., \"admin\", \"member\")",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "BackendService"
-        ]
-      }
-    },
-    "/permissions/revoke": {
-      "post": {
-        "summary": "Revoke a permission from a team",
-        "operationId": "BackendService_RevokePermission",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/customersRevokePermissionResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "teamId",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "permissionId",
-            "in": "query",
-            "required": false,
-            "type": "string"
           }
         ],
         "tags": [
@@ -189,6 +150,7 @@
     },
     "/register": {
       "post": {
+        "summary": "Authentication",
         "operationId": "BackendService_Register",
         "responses": {
           "200": {
@@ -204,6 +166,126 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/customersRegisterRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/roles": {
+      "post": {
+        "operationId": "BackendService_CreateRole",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersRole"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/customersCreateRoleRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/roles/{roleId}/assign": {
+      "post": {
+        "operationId": "BackendService_AssignRole",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackendServiceAssignRoleBody"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/roles/{roleId}/revoke": {
+      "post": {
+        "operationId": "BackendService_RevokeRole",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackendServiceRevokeRoleBody"
+            }
+          }
+        ],
         "tags": [
           "BackendService"
         ]
@@ -211,13 +293,13 @@
     },
     "/teams": {
       "post": {
-        "summary": "Create a team",
+        "summary": "Team management",
         "operationId": "BackendService_CreateTeam",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/customersCreateTeamResponse"
+              "$ref": "#/definitions/customersTeam"
             }
           },
           "default": {
@@ -229,10 +311,12 @@
         },
         "parameters": [
           {
-            "name": "name",
-            "in": "query",
-            "required": false,
-            "type": "string"
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/customersCreateTeamRequest"
+            }
           }
         ],
         "tags": [
@@ -240,15 +324,109 @@
         ]
       }
     },
-    "/teams/add_user": {
+    "/teams/{teamId}": {
+      "get": {
+        "operationId": "BackendService_GetTeam",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersTeam"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      },
+      "delete": {
+        "operationId": "BackendService_DeleteTeam",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      },
+      "put": {
+        "operationId": "BackendService_UpdateTeam",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersTeam"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackendServiceUpdateTeamBody"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/teams/{teamId}/users": {
       "post": {
-        "summary": "Add a user to a team",
         "operationId": "BackendService_AddUserToTeam",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/customersAddUserToTeamResponse"
+              "$ref": "#/definitions/customersTeam"
             }
           },
           "default": {
@@ -261,14 +439,52 @@
         "parameters": [
           {
             "name": "teamId",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackendServiceAddUserToTeamBody"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/teams/{teamId}/users/{userId}": {
+      "delete": {
+        "operationId": "BackendService_RemoveUserFromTeam",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersTeam"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
             "type": "string"
           },
           {
             "name": "userId",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string"
           }
         ],
@@ -277,15 +493,15 @@
         ]
       }
     },
-    "/teams/remove_user": {
+    "/users": {
       "post": {
-        "summary": "Remove a user from a team",
-        "operationId": "BackendService_RemoveUserFromTeam",
+        "summary": "User management",
+        "operationId": "BackendService_CreateUser",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/customersRemoveUserFromTeamResponse"
+              "$ref": "#/definitions/customersCreateUserResponse"
             }
           },
           "default": {
@@ -297,16 +513,106 @@
         },
         "parameters": [
           {
-            "name": "teamId",
-            "in": "query",
-            "required": false,
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/customersCreateUserRequest"
+            }
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      }
+    },
+    "/users/{userId}": {
+      "get": {
+        "operationId": "BackendService_GetUser",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersUser"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      },
+      "delete": {
+        "operationId": "BackendService_DeleteUser",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersDeleteUserResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "BackendService"
+        ]
+      },
+      "put": {
+        "operationId": "BackendService_UpdateUser",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/customersUser"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
             "type": "string"
           },
           {
-            "name": "userId",
-            "in": "query",
-            "required": false,
-            "type": "string"
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BackendServiceUpdateUserBody"
+            }
           }
         ],
         "tags": [
@@ -316,6 +622,7 @@
     },
     "/version": {
       "get": {
+        "summary": "Version",
         "operationId": "BackendService_Version",
         "responses": {
           "200": {
@@ -338,35 +645,133 @@
     }
   },
   "definitions": {
-    "customersAddUserToTeamResponse": {
+    "BackendServiceAddUserToTeamBody": {
       "type": "object",
       "properties": {
-        "team": {
-          "$ref": "#/definitions/customersTeam"
+        "userId": {
+          "type": "string"
         }
       }
     },
-    "customersAssignPermissionResponse": {
+    "BackendServiceAssignRoleBody": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string",
+          "title": "e.g., team_id or org_id"
+        }
+      }
+    },
+    "BackendServiceRevokeRoleBody": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        }
+      }
+    },
+    "BackendServiceUpdateOrganizationBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        }
+      }
+    },
+    "BackendServiceUpdateTeamBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "BackendServiceUpdateUserBody": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "$ref": "#/definitions/customersUserProfile"
+        }
+      }
+    },
+    "customersCreatePermissionRequest": {
       "type": "object",
       "properties": {
         "permission": {
           "$ref": "#/definitions/customersPermission"
         }
-      }
+      },
+      "title": "Permission and Role management messages"
     },
-    "customersCreateTeamResponse": {
+    "customersCreateRoleRequest": {
       "type": "object",
       "properties": {
-        "team": {
-          "$ref": "#/definitions/customersTeam"
+        "role": {
+          "$ref": "#/definitions/customersRole"
         }
       }
+    },
+    "customersCreateTeamRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "orgId": {
+          "type": "string"
+        }
+      },
+      "title": "Team management messages"
+    },
+    "customersCreateUserRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/definitions/customersUserProfile"
+        }
+      },
+      "title": "User management messages"
+    },
+    "customersCreateUserResponse": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "$ref": "#/definitions/customersUser"
+        }
+      }
+    },
+    "customersDeleteUserResponse": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "$ref": "#/definitions/customersUser"
+        }
+      }
+    },
+    "customersLoginRequest": {
+      "type": "object",
+      "title": "Authentication related messages"
     },
     "customersLoginResponse": {
       "type": "object",
       "properties": {
         "user": {
           "$ref": "#/definitions/customersUser"
+        },
+        "refreshToken": {
+          "type": "string"
         }
       }
     },
@@ -378,8 +783,12 @@
         },
         "name": {
           "type": "string"
+        },
+        "domain": {
+          "type": "string"
         }
-      }
+      },
+      "title": "Organization related messages"
     },
     "customersPermission": {
       "type": "object",
@@ -387,17 +796,33 @@
         "id": {
           "type": "string"
         },
-        "teamId": {
-          "type": "string",
-          "title": "Associated team ID"
+        "name": {
+          "type": "string"
         },
         "resource": {
-          "type": "string",
-          "title": "Resource to which the permission applies"
+          "type": "string"
         },
-        "role": {
+        "access": {
           "type": "string",
-          "title": "Role within the team (e.g., \"admin\", \"member\")"
+          "title": "e.g., \"read\", \"write\", \"delete\""
+        }
+      },
+      "title": "Permission and Role related messages"
+    },
+    "customersRegisterRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/definitions/customersUserProfile"
+        },
+        "organizationName": {
+          "type": "string"
         }
       }
     },
@@ -412,22 +837,29 @@
         },
         "organization": {
           "$ref": "#/definitions/customersOrganization"
+        },
+        "accessToken": {
+          "type": "string"
+        },
+        "refreshToken": {
+          "type": "string"
         }
       }
     },
-    "customersRemoveUserFromTeamResponse": {
+    "customersRole": {
       "type": "object",
       "properties": {
-        "team": {
-          "$ref": "#/definitions/customersTeam"
-        }
-      }
-    },
-    "customersRevokePermissionResponse": {
-      "type": "object",
-      "properties": {
-        "permission": {
-          "$ref": "#/definitions/customersPermission"
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "permissionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -440,42 +872,20 @@
         "name": {
           "type": "string"
         },
-        "members": {
+        "memberIds": {
           "type": "array",
           "items": {
-            "type": "object",
-            "$ref": "#/definitions/customersUser"
+            "type": "string"
           },
-          "title": "List of users in the team"
+          "title": "List of user IDs in the team"
         }
-      }
-    },
-    "customersUpdateOrganizationRequest": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "domain": {
-          "type": "string"
-        }
-      }
-    },
-    "customersUpdateOrganizationResponse": {
-      "type": "object",
-      "properties": {
-        "org": {
-          "$ref": "#/definitions/customersOrganization"
-        }
-      }
+      },
+      "title": "Team related messages"
     },
     "customersUser": {
       "type": "object",
       "properties": {
         "id": {
-          "type": "string"
-        },
-        "signupAuthId": {
           "type": "string"
         },
         "status": {
@@ -484,9 +894,6 @@
         "email": {
           "type": "string"
         },
-        "profile": {
-          "$ref": "#/definitions/customersUserProfile"
-        },
         "signedUpAt": {
           "type": "string",
           "format": "date-time"
@@ -494,8 +901,12 @@
         "lastLoginAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "profile": {
+          "$ref": "#/definitions/customersUserProfile"
         }
-      }
+      },
+      "title": "User related messages"
     },
     "customersUserProfile": {
       "type": "object",
@@ -522,7 +933,8 @@
         "version": {
           "type": "string"
         }
-      }
+      },
+      "title": "Version related messages"
     },
     "protobufAny": {
       "type": "object",

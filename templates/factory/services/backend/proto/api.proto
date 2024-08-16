@@ -3,23 +3,22 @@ package customers;
 
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "buf/validate/validate.proto";
 
-message VersionRequest {
-}
-
+// Version related messages
 message VersionResponse {
-    string version = 1;
+    string version = 1 [(buf.validate.field).string.min_len = 1];
 }
 
+// User related messages
 message User {
-    string id = 1;
-    string signup_auth_id = 2;
-    string status = 3;
-    string email = 5;
+    string id = 1 [(buf.validate.field).string.uuid = true];
+    string status = 2;
+    string email = 3;
+    google.protobuf.Timestamp signed_up_at = 4;
+    google.protobuf.Timestamp last_login_at = 5;
     UserProfile profile = 6;
-
-   google.protobuf.Timestamp  signed_up_at = 7;
-   google.protobuf.Timestamp last_login_at = 8;
 }
 
 message UserProfile {
@@ -28,34 +27,116 @@ message UserProfile {
 }
 
 message UserStatus {
-    string status = 2;
+    string status = 1;
 }
 
+// Organization related messages
 message Organization {
     string id = 1;
     string name = 2;
+    string domain = 3;
 }
 
-
+// Team related messages
 message Team {
     string id = 1;
     string name = 2;
-    repeated User members = 3; // List of users in the team
+    repeated string member_ids = 3; // List of user IDs in the team
 }
 
+// Permission and Role related messages
 message Permission {
     string id = 1;
-    string team_id = 2; // Associated team ID
-    string resource = 3; // Resource to which the permission applies
-    string role = 4;     // Role within the team (e.g., "admin", "member")
+    string name = 2;
+    string resource = 3;
+    string access = 4; // e.g., "read", "write", "delete"
 }
 
+message Role {
+    string id = 1;
+    string name = 2;
+    repeated string permission_ids = 3;
+}
+
+// Authentication related messages
+message LoginRequest {
+}
+
+message LoginResponse {
+    User user = 1;
+    string refresh_token = 3;
+}
+
+message RegisterRequest {
+    string email = 1;
+    string password = 2;
+    UserProfile profile = 3;
+    string organization_name = 4;
+}
+
+message RegisterUserResponse {
+    User user = 1;
+    UserStatus status = 2;
+    Organization organization = 3;
+    string access_token = 4;
+    string refresh_token = 5;
+}
+
+// User management messages
+message CreateUserRequest {
+    string email = 1;
+    UserProfile profile = 2;
+}
+
+message CreateUserResponse {
+    User user = 1;
+}
+
+message DeleteUserRequest {
+    string user_id = 1;
+}
+
+message DeleteUserResponse {
+    User user = 1;
+}
+
+message GetUserRequest {
+    string user_id = 1;
+}
+
+message UpdateUserRequest {
+    string user_id = 1;
+    UserProfile profile = 2;
+}
+
+// Organization management messages
+message GetOrganizationRequest {
+    string org_id = 1;
+}
+
+message UpdateOrganizationRequest {
+    string org_id = 1;
+    string name = 2;
+    string domain = 3;
+}
+
+// Team management messages
 message CreateTeamRequest {
     string name = 1;
+    string org_id = 2;
 }
 
-message CreateTeamResponse {
-    Team team = 1;
+message GetTeamRequest {
+    string team_id = 1;
+}
+
+message UpdateTeamRequest {
+    string team_id = 1;
+    string name = 2;
+}
+
+message DeleteTeamRequest {
+    string team_id = 1;
 }
 
 message AddUserToTeamRequest {
@@ -63,138 +144,162 @@ message AddUserToTeamRequest {
     string user_id = 2;
 }
 
-message AddUserToTeamResponse {
-    Team team = 1;
-}
-
 message RemoveUserFromTeamRequest {
     string team_id = 1;
     string user_id = 2;
 }
 
-message RemoveUserFromTeamResponse {
-    Team team = 1;
-}
-
-message AssignPermissionRequest {
-    string team_id = 1;
-    Permission permission = 2;
-}
-
-message AssignPermissionResponse {
+// Permission and Role management messages
+message CreatePermissionRequest {
     Permission permission = 1;
 }
 
-message RevokePermissionRequest {
-    string team_id = 1;
-    string permission_id = 2;
+message CreateRoleRequest {
+    Role role = 1;
 }
 
-message RevokePermissionResponse {
-    Permission permission = 1;
+message AssignRoleRequest {
+    string role_id = 1;
+    string user_id = 2;
+    string resource_id = 3; // e.g., team_id or org_id
 }
 
-
-// Information for login is passed by API Gateway as header
-message LoginRequest {}
-
-message LoginResponse {
-    User user = 1;
+message RevokeRoleRequest {
+    string role_id = 1;
+    string user_id = 2;
+    string resource_id = 3;
 }
-
-
-// Information for registration is passed by API Gateway as header
-// An organization will be created for the user and the user will be made the owner
-message RegisterRequest {}
-
-message RegisterUserResponse {
-    User user = 1;
-    UserStatus status = 2;
-    Organization organization = 3;
-}
-
-message GetOrganizationRequest {}
-
-
-message UpdateOrganizationRequest {
-    string name = 1;
-    string domain = 2;
-}
-
-message UpdateOrganizationResponse {
-    Organization org = 1;
-}
-
-
 
 service BackendService {
-
-    rpc Version(VersionRequest) returns (VersionResponse) {
+    // Version
+    rpc Version(google.protobuf.Empty) returns (VersionResponse) {
         option (google.api.http) = {
             get: "/version"
         };
     }
 
+    // Authentication
     rpc Register(RegisterRequest) returns (RegisterUserResponse) {
-      option (google.api.http) = {
-          post: "/register"
-      };
+        option (google.api.http) = {
+            post: "/register"
+            body: "*"
+        };
     }
 
     rpc Login(LoginRequest) returns (LoginResponse) {
         option (google.api.http) = {
             post: "/login"
-        };
-    }
-
-    // Organization for the authenticated user
-    rpc GetOrganization(GetOrganizationRequest) returns (Organization) {
-        option (google.api.http) = {
-            get: "/organization"
-        };
-    }
-
-    // Organization for the authenticated user
-    rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse) {
-        option (google.api.http) = {
-            post: "/organization"
             body: "*"
         };
     }
 
-    // Create a team
-    rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse) {
+    // User management
+    rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+        option (google.api.http) = {
+            post: "/users"
+            body: "*"
+        };
+    }
+
+    rpc GetUser(GetUserRequest) returns (User) {
+        option (google.api.http) = {
+            get: "/users/{user_id}"
+        };
+    }
+
+    rpc UpdateUser(UpdateUserRequest) returns (User) {
+        option (google.api.http) = {
+            put: "/users/{user_id}"
+            body: "*"
+        };
+    }
+
+    rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {
+        option (google.api.http) = {
+            delete: "/users/{user_id}"
+        };
+    }
+
+    // Organization management
+    rpc GetOrganization(GetOrganizationRequest) returns (Organization) {
+        option (google.api.http) = {
+            get: "/organizations/{org_id}"
+        };
+    }
+
+    rpc UpdateOrganization(UpdateOrganizationRequest) returns (Organization) {
+        option (google.api.http) = {
+            put: "/organizations/{org_id}"
+            body: "*"
+        };
+    }
+
+    // Team management
+    rpc CreateTeam(CreateTeamRequest) returns (Team) {
         option (google.api.http) = {
             post: "/teams"
+            body: "*"
         };
     }
 
-    // Add a user to a team
-    rpc AddUserToTeam(AddUserToTeamRequest) returns (AddUserToTeamResponse) {
+    rpc GetTeam(GetTeamRequest) returns (Team) {
         option (google.api.http) = {
-            post: "/teams/add_user"
+            get: "/teams/{team_id}"
         };
     }
 
-    // Remove a user from a team
-    rpc RemoveUserFromTeam(RemoveUserFromTeamRequest) returns (RemoveUserFromTeamResponse) {
+    rpc UpdateTeam(UpdateTeamRequest) returns (Team) {
         option (google.api.http) = {
-            post: "/teams/remove_user"
+            put: "/teams/{team_id}"
+            body: "*"
         };
     }
 
-    // Assign a permission to a team
-    rpc AssignPermission(AssignPermissionRequest) returns (AssignPermissionResponse) {
+    rpc DeleteTeam(DeleteTeamRequest) returns (google.protobuf.Empty) {
         option (google.api.http) = {
-            post: "/permissions/assign"
+            delete: "/teams/{team_id}"
         };
     }
 
-    // Revoke a permission from a team
-    rpc RevokePermission(RevokePermissionRequest) returns (RevokePermissionResponse) {
+    rpc AddUserToTeam(AddUserToTeamRequest) returns (Team) {
         option (google.api.http) = {
-            post: "/permissions/revoke"
+            post: "/teams/{team_id}/users"
+            body: "*"
         };
     }
 
+    rpc RemoveUserFromTeam(RemoveUserFromTeamRequest) returns (Team) {
+        option (google.api.http) = {
+            delete: "/teams/{team_id}/users/{user_id}"
+        };
+    }
+
+    // Permission and Role management
+    rpc CreatePermission(CreatePermissionRequest) returns (Permission) {
+        option (google.api.http) = {
+            post: "/permissions"
+            body: "*"
+        };
+    }
+
+    rpc CreateRole(CreateRoleRequest) returns (Role) {
+        option (google.api.http) = {
+            post: "/roles"
+            body: "*"
+        };
+    }
+
+    rpc AssignRole(AssignRoleRequest) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/roles/{role_id}/assign"
+            body: "*"
+        };
+    }
+
+    rpc RevokeRole(RevokeRoleRequest) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/roles/{role_id}/revoke"
+            body: "*"
+        };
+    }
 }

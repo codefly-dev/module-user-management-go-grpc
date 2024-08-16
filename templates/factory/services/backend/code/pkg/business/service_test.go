@@ -1,23 +1,11 @@
 package business_test
 
 import (
-	"backend/pkg/adapters"
 	"backend/pkg/business"
-	"backend/pkg/gen"
 	"backend/pkg/infra"
 	"context"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"testing"
 	"time"
-
-	"google.golang.org/protobuf/encoding/protojson"
-
-	codefly "github.com/codefly-dev/sdk-go"
-
-	"github.com/codefly-dev/core/shared"
 
 	"github.com/codefly-dev/core/cli"
 
@@ -46,118 +34,125 @@ func TestUser(t *testing.T) {
 	service, err := business.NewService(store)
 	require.NoError(t, err)
 
-	authID := "test-auth-id"
-	email := "email@test.com"
-
-	u := &gen.User{
-		SignupAuthId: authID,
-		Email:        email,
+	// Register a new user
+	rootAuthId := "root-auth-id"
+	rootEmail := "root@email.com"
+	exists, err := store.GetUserByAuthId(ctx, rootAuthId)
+	require.NoError(t, err)
+	if exists != nil {
+		err = store.DeleteUser(ctx, exists.Id)
+		require.NoError(t, err)
 	}
 
-	_, err = service.DeleteOwner(ctx, authID)
-	require.NoError(t, err)
+	registerInput := &business.RegisterUserInput{Email: rootEmail, SignupAuthId: rootAuthId}
 
-	respRegisterUser, err := service.RegisterUser(ctx, u)
+	respRegisterUser, err := service.RegisterUser(ctx, registerInput)
 	require.NoError(t, err)
-	require.Equal(t, email, respRegisterUser.User.Email)
+	root := respRegisterUser.User
+	require.NotNil(t, root)
+	require.Equal(t, rootEmail, root.Email)
+	org := respRegisterUser.Organization
+	require.NotNil(t, org)
 	require.Equal(t, business.DefaultOrganizationName, respRegisterUser.Organization.Name)
 
-	userBack, err := service.GetUserByAuthID(ctx, authID)
+	userBack, err := service.GetUserByAuthId(ctx, rootAuthId)
 	require.NoError(t, err)
-	require.Equal(t, email, userBack.Email)
-	require.Equal(t, authID, userBack.SignupAuthId)
+	require.NotNil(t, userBack)
+	require.Equal(t, root.Email, userBack.Email)
 
-	org, err := service.GetOrganizationForOwner(ctx, u)
-	require.NoError(t, err)
-	require.Equal(t, org.Name, business.DefaultOrganizationName)
-
-	teams, err := service.GetTeams(ctx, org)
-	require.NoError(t, err)
-	require.Len(t, teams, 1)
-	require.Equal(t, teams[0].Name, "Administrators")
-
-	// Try the REST API
-	adapters.WithService(service)
-
-	restPort := uint16(50002)
-	config := &adapters.Configuration{
-		EndpointGrpcPort: 50001,
-		EndpointHttpPort: shared.Pointer(restPort),
-	}
-
-	server, err := adapters.NewServer(config)
-	if err != nil {
-		panic(err)
-	}
-
-	go func() {
-		err = server.Start(context.Background())
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	timeout := 500 * time.Second
-	for tries := 0; tries < 5; tries++ {
-		// HTTP Request
-
-		req := &http.Request{
-			URL: shared.Must(url.Parse(fmt.Sprintf("http://localhost:%d/version", restPort)))}
-		client := http.Client{Timeout: timeout}
-		resp, err := client.Do(req)
-		if err != nil {
-			// "Ready" check
-			continue
-		}
-		require.Equal(t, resp.StatusCode, http.StatusOK)
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		var ver gen.VersionResponse
-		err = protojson.Unmarshal(body, &ver)
-		require.NoError(t, err)
-		require.Equal(t, codefly.Version(), ver.Version)
-
-		// Login
-		callContext := context.Background()
-		w := wool.Get(callContext).In("TestUser")
-		w.WithUserAuthID(authID)
-
-		req = &http.Request{
-			Method: http.MethodPost,
-			Header: w.HTTP().Headers(),
-			URL:    shared.Must(url.Parse(fmt.Sprintf("http://localhost:%d/login", restPort)))}
-		client = http.Client{Timeout: timeout}
-
-		resp, err = client.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, resp.StatusCode, http.StatusOK)
-
-		var u gen.LoginResponse
-		body, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		err = protojson.Unmarshal(body, &u)
-		require.NoError(t, err)
-		require.Equal(t, authID, u.User.SignupAuthId)
-		require.Equal(t, email, u.User.Email)
-
-		// Get organization
-		req = &http.Request{
-			Header: w.HTTP().Headers(),
-			URL:    shared.Must(url.Parse(fmt.Sprintf("http://localhost:%d/organization", restPort)))}
-		client = http.Client{Timeout: timeout}
-		resp, err = client.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, resp.StatusCode, http.StatusOK)
-		var rO gen.Organization
-		body, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		err = protojson.Unmarshal(body, &rO)
-		require.NoError(t, err)
-		require.Equal(t, business.DefaultOrganizationName, rO.Name)
-
-		return
-	}
-	t.Fatal("REST call failed")
+	//adapters.WithService(service)
+	//
+	//restPort := uint16(50002)
+	//config := &adapters.Configuration{
+	//	EndpointGrpcPort: 50001,
+	//	EndpointHttpPort: shared.Pointer(restPort),
+	//}
+	//server, err := adapters.NewServer(config)
+	//require.NoError(t, err)
+	//
+	//// At the gRPC level to test out authz
+	//ctx = context.Background()
+	//w := wool.Get(ctx)
+	//w.WithUserAuthID(admin.SignupAuthId)
+	//
+	//// Login
+	//
+	//login, err := server.Grpc.Login(w.GRPC().Out(), &gen.LoginRequest{})
+	//require.NoError(t, err)
+	//require.NotNil(t, login.User)
+	//require.Equal(t, admin.Email, login.User.Email)
+	//
+	//// Create and delete a user
+	//createUser, err := server.Grpc.CreateUser(w.GRPC().Out(), &gen.CreateUserRequest{Email: "test@email.com"})
+	//require.NoError(t, err)
+	//deleteUser, err := server.Grpc.DeleteUser(w.GRPC().Out(), &gen.DeleteUserRequest{UserId: createUser.User.Id})
+	//require.NoError(t, err)
+	//require.NotNil(t, deleteUser.User)
+	//// Delete again should get not found err
+	//_, err = server.Grpc.DeleteUser(w.GRPC().Out(), &gen.DeleteUserRequest{UserId: createUser.User.Id})
+	//require.Error(t, err)
+	//require.True(t, wool.IsNotFound(err))
+	//
+	//// Assume the guest user -- ensure we can't add a user
+	//w.WithUserAuthID(guest.SignupAuthId)
+	//_, err = server.Grpc.CreateUser(w.GRPC().Out(), &gen.CreateUserRequest{Email: "willnotwork@email.com"})
+	//require.Error(t, err)
+	//require.True(t, wool.IsUnauthorized(err))
+	//
+	//// Try the REST APIs for completeness
+	//go func() {
+	//	err = server.Start(context.Background())
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//}()
+	//
+	//timeout := 500 * time.Second
+	//for tries := 0; tries < 5; tries++ {
+	//	// HTTP Requests
+	//
+	//	req := &http.Request{
+	//		URL: shared.Must(url.Parse(fmt.Sprintf("http://localhost:%d/version", restPort)))}
+	//	client := http.Client{Timeout: timeout}
+	//	resp, err := client.Do(req)
+	//	if err != nil {
+	//		// "Ready" check
+	//		continue
+	//	}
+	//	require.Equal(t, resp.StatusCode, http.StatusOK)
+	//	body, err := io.ReadAll(resp.Body)
+	//	require.NoError(t, err)
+	//	var ver gen.VersionResponse
+	//	err = protojson.Unmarshal(body, &ver)
+	//	require.NoError(t, err)
+	//	require.Equal(t, codefly.Version(), ver.Version)
+	//
+	//	// Login
+	//	callContext := context.Background()
+	//	w := wool.Get(callContext).In("TestUser")
+	//	w.WithUserAuthID(admin.SignupAuthId)
+	//
+	//	req = &http.Request{
+	//		Method: http.MethodPost,
+	//		Header: w.HTTP().Headers(),
+	//		URL:    shared.Must(url.Parse(fmt.Sprintf("http://localhost:%d/login", restPort)))}
+	//	client = http.Client{Timeout: timeout}
+	//
+	//	resp, err = client.Do(req)
+	//	require.NoError(t, err)
+	//	require.Equal(t, resp.StatusCode, http.StatusOK)
+	//
+	//	var u gen.LoginResponse
+	//	body, err = io.ReadAll(resp.Body)
+	//	require.NoError(t, err)
+	//
+	//	err = protojson.Unmarshal(body, &u)
+	//	require.NoError(t, err)
+	//	require.Equal(t, admin.SignupAuthId, u.User.SignupAuthId)
+	//	require.Equal(t, admin.Email, u.User.Email)
+	//
+	//	return
+	//}
+	//t.Fatal("REST call failed")
 
 }

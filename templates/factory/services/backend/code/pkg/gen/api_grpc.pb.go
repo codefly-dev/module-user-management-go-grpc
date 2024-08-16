@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -22,36 +23,53 @@ const (
 	BackendService_Version_FullMethodName            = "/customers.BackendService/Version"
 	BackendService_Register_FullMethodName           = "/customers.BackendService/Register"
 	BackendService_Login_FullMethodName              = "/customers.BackendService/Login"
+	BackendService_CreateUser_FullMethodName         = "/customers.BackendService/CreateUser"
+	BackendService_GetUser_FullMethodName            = "/customers.BackendService/GetUser"
+	BackendService_UpdateUser_FullMethodName         = "/customers.BackendService/UpdateUser"
+	BackendService_DeleteUser_FullMethodName         = "/customers.BackendService/DeleteUser"
 	BackendService_GetOrganization_FullMethodName    = "/customers.BackendService/GetOrganization"
 	BackendService_UpdateOrganization_FullMethodName = "/customers.BackendService/UpdateOrganization"
 	BackendService_CreateTeam_FullMethodName         = "/customers.BackendService/CreateTeam"
+	BackendService_GetTeam_FullMethodName            = "/customers.BackendService/GetTeam"
+	BackendService_UpdateTeam_FullMethodName         = "/customers.BackendService/UpdateTeam"
+	BackendService_DeleteTeam_FullMethodName         = "/customers.BackendService/DeleteTeam"
 	BackendService_AddUserToTeam_FullMethodName      = "/customers.BackendService/AddUserToTeam"
 	BackendService_RemoveUserFromTeam_FullMethodName = "/customers.BackendService/RemoveUserFromTeam"
-	BackendService_AssignPermission_FullMethodName   = "/customers.BackendService/AssignPermission"
-	BackendService_RevokePermission_FullMethodName   = "/customers.BackendService/RevokePermission"
+	BackendService_CreatePermission_FullMethodName   = "/customers.BackendService/CreatePermission"
+	BackendService_CreateRole_FullMethodName         = "/customers.BackendService/CreateRole"
+	BackendService_AssignRole_FullMethodName         = "/customers.BackendService/AssignRole"
+	BackendService_RevokeRole_FullMethodName         = "/customers.BackendService/RevokeRole"
 )
 
 // BackendServiceClient is the client API for BackendService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BackendServiceClient interface {
-	Version(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error)
+	// Version
+	Version(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*VersionResponse, error)
+	// Authentication
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterUserResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
-	// Organization for the authenticated user
+	// User management
+	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error)
+	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*User, error)
+	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*User, error)
+	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error)
+	// Organization management
 	GetOrganization(ctx context.Context, in *GetOrganizationRequest, opts ...grpc.CallOption) (*Organization, error)
-	// Organization for the authenticated user
-	UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*UpdateOrganizationResponse, error)
-	// Create a team
-	CreateTeam(ctx context.Context, in *CreateTeamRequest, opts ...grpc.CallOption) (*CreateTeamResponse, error)
-	// Add a user to a team
-	AddUserToTeam(ctx context.Context, in *AddUserToTeamRequest, opts ...grpc.CallOption) (*AddUserToTeamResponse, error)
-	// Remove a user from a team
-	RemoveUserFromTeam(ctx context.Context, in *RemoveUserFromTeamRequest, opts ...grpc.CallOption) (*RemoveUserFromTeamResponse, error)
-	// Assign a permission to a team
-	AssignPermission(ctx context.Context, in *AssignPermissionRequest, opts ...grpc.CallOption) (*AssignPermissionResponse, error)
-	// Revoke a permission from a team
-	RevokePermission(ctx context.Context, in *RevokePermissionRequest, opts ...grpc.CallOption) (*RevokePermissionResponse, error)
+	UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*Organization, error)
+	// Team management
+	CreateTeam(ctx context.Context, in *CreateTeamRequest, opts ...grpc.CallOption) (*Team, error)
+	GetTeam(ctx context.Context, in *GetTeamRequest, opts ...grpc.CallOption) (*Team, error)
+	UpdateTeam(ctx context.Context, in *UpdateTeamRequest, opts ...grpc.CallOption) (*Team, error)
+	DeleteTeam(ctx context.Context, in *DeleteTeamRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	AddUserToTeam(ctx context.Context, in *AddUserToTeamRequest, opts ...grpc.CallOption) (*Team, error)
+	RemoveUserFromTeam(ctx context.Context, in *RemoveUserFromTeamRequest, opts ...grpc.CallOption) (*Team, error)
+	// Permission and Role management
+	CreatePermission(ctx context.Context, in *CreatePermissionRequest, opts ...grpc.CallOption) (*Permission, error)
+	CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*Role, error)
+	AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	RevokeRole(ctx context.Context, in *RevokeRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type backendServiceClient struct {
@@ -62,7 +80,7 @@ func NewBackendServiceClient(cc grpc.ClientConnInterface) BackendServiceClient {
 	return &backendServiceClient{cc}
 }
 
-func (c *backendServiceClient) Version(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error) {
+func (c *backendServiceClient) Version(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*VersionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VersionResponse)
 	err := c.cc.Invoke(ctx, BackendService_Version_FullMethodName, in, out, cOpts...)
@@ -92,6 +110,46 @@ func (c *backendServiceClient) Login(ctx context.Context, in *LoginRequest, opts
 	return out, nil
 }
 
+func (c *backendServiceClient) CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateUserResponse)
+	err := c.cc.Invoke(ctx, BackendService_CreateUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*User, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(User)
+	err := c.cc.Invoke(ctx, BackendService_GetUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*User, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(User)
+	err := c.cc.Invoke(ctx, BackendService_UpdateUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteUserResponse)
+	err := c.cc.Invoke(ctx, BackendService_DeleteUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *backendServiceClient) GetOrganization(ctx context.Context, in *GetOrganizationRequest, opts ...grpc.CallOption) (*Organization, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Organization)
@@ -102,9 +160,9 @@ func (c *backendServiceClient) GetOrganization(ctx context.Context, in *GetOrgan
 	return out, nil
 }
 
-func (c *backendServiceClient) UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*UpdateOrganizationResponse, error) {
+func (c *backendServiceClient) UpdateOrganization(ctx context.Context, in *UpdateOrganizationRequest, opts ...grpc.CallOption) (*Organization, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpdateOrganizationResponse)
+	out := new(Organization)
 	err := c.cc.Invoke(ctx, BackendService_UpdateOrganization_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -112,9 +170,9 @@ func (c *backendServiceClient) UpdateOrganization(ctx context.Context, in *Updat
 	return out, nil
 }
 
-func (c *backendServiceClient) CreateTeam(ctx context.Context, in *CreateTeamRequest, opts ...grpc.CallOption) (*CreateTeamResponse, error) {
+func (c *backendServiceClient) CreateTeam(ctx context.Context, in *CreateTeamRequest, opts ...grpc.CallOption) (*Team, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateTeamResponse)
+	out := new(Team)
 	err := c.cc.Invoke(ctx, BackendService_CreateTeam_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -122,9 +180,39 @@ func (c *backendServiceClient) CreateTeam(ctx context.Context, in *CreateTeamReq
 	return out, nil
 }
 
-func (c *backendServiceClient) AddUserToTeam(ctx context.Context, in *AddUserToTeamRequest, opts ...grpc.CallOption) (*AddUserToTeamResponse, error) {
+func (c *backendServiceClient) GetTeam(ctx context.Context, in *GetTeamRequest, opts ...grpc.CallOption) (*Team, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AddUserToTeamResponse)
+	out := new(Team)
+	err := c.cc.Invoke(ctx, BackendService_GetTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) UpdateTeam(ctx context.Context, in *UpdateTeamRequest, opts ...grpc.CallOption) (*Team, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Team)
+	err := c.cc.Invoke(ctx, BackendService_UpdateTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) DeleteTeam(ctx context.Context, in *DeleteTeamRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, BackendService_DeleteTeam_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) AddUserToTeam(ctx context.Context, in *AddUserToTeamRequest, opts ...grpc.CallOption) (*Team, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Team)
 	err := c.cc.Invoke(ctx, BackendService_AddUserToTeam_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -132,9 +220,9 @@ func (c *backendServiceClient) AddUserToTeam(ctx context.Context, in *AddUserToT
 	return out, nil
 }
 
-func (c *backendServiceClient) RemoveUserFromTeam(ctx context.Context, in *RemoveUserFromTeamRequest, opts ...grpc.CallOption) (*RemoveUserFromTeamResponse, error) {
+func (c *backendServiceClient) RemoveUserFromTeam(ctx context.Context, in *RemoveUserFromTeamRequest, opts ...grpc.CallOption) (*Team, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RemoveUserFromTeamResponse)
+	out := new(Team)
 	err := c.cc.Invoke(ctx, BackendService_RemoveUserFromTeam_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -142,20 +230,40 @@ func (c *backendServiceClient) RemoveUserFromTeam(ctx context.Context, in *Remov
 	return out, nil
 }
 
-func (c *backendServiceClient) AssignPermission(ctx context.Context, in *AssignPermissionRequest, opts ...grpc.CallOption) (*AssignPermissionResponse, error) {
+func (c *backendServiceClient) CreatePermission(ctx context.Context, in *CreatePermissionRequest, opts ...grpc.CallOption) (*Permission, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AssignPermissionResponse)
-	err := c.cc.Invoke(ctx, BackendService_AssignPermission_FullMethodName, in, out, cOpts...)
+	out := new(Permission)
+	err := c.cc.Invoke(ctx, BackendService_CreatePermission_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *backendServiceClient) RevokePermission(ctx context.Context, in *RevokePermissionRequest, opts ...grpc.CallOption) (*RevokePermissionResponse, error) {
+func (c *backendServiceClient) CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*Role, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RevokePermissionResponse)
-	err := c.cc.Invoke(ctx, BackendService_RevokePermission_FullMethodName, in, out, cOpts...)
+	out := new(Role)
+	err := c.cc.Invoke(ctx, BackendService_CreateRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, BackendService_AssignRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendServiceClient) RevokeRole(ctx context.Context, in *RevokeRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, BackendService_RevokeRole_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,23 +274,31 @@ func (c *backendServiceClient) RevokePermission(ctx context.Context, in *RevokeP
 // All implementations must embed UnimplementedBackendServiceServer
 // for forward compatibility.
 type BackendServiceServer interface {
-	Version(context.Context, *VersionRequest) (*VersionResponse, error)
+	// Version
+	Version(context.Context, *emptypb.Empty) (*VersionResponse, error)
+	// Authentication
 	Register(context.Context, *RegisterRequest) (*RegisterUserResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
-	// Organization for the authenticated user
+	// User management
+	CreateUser(context.Context, *CreateUserRequest) (*CreateUserResponse, error)
+	GetUser(context.Context, *GetUserRequest) (*User, error)
+	UpdateUser(context.Context, *UpdateUserRequest) (*User, error)
+	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error)
+	// Organization management
 	GetOrganization(context.Context, *GetOrganizationRequest) (*Organization, error)
-	// Organization for the authenticated user
-	UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*UpdateOrganizationResponse, error)
-	// Create a team
-	CreateTeam(context.Context, *CreateTeamRequest) (*CreateTeamResponse, error)
-	// Add a user to a team
-	AddUserToTeam(context.Context, *AddUserToTeamRequest) (*AddUserToTeamResponse, error)
-	// Remove a user from a team
-	RemoveUserFromTeam(context.Context, *RemoveUserFromTeamRequest) (*RemoveUserFromTeamResponse, error)
-	// Assign a permission to a team
-	AssignPermission(context.Context, *AssignPermissionRequest) (*AssignPermissionResponse, error)
-	// Revoke a permission from a team
-	RevokePermission(context.Context, *RevokePermissionRequest) (*RevokePermissionResponse, error)
+	UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*Organization, error)
+	// Team management
+	CreateTeam(context.Context, *CreateTeamRequest) (*Team, error)
+	GetTeam(context.Context, *GetTeamRequest) (*Team, error)
+	UpdateTeam(context.Context, *UpdateTeamRequest) (*Team, error)
+	DeleteTeam(context.Context, *DeleteTeamRequest) (*emptypb.Empty, error)
+	AddUserToTeam(context.Context, *AddUserToTeamRequest) (*Team, error)
+	RemoveUserFromTeam(context.Context, *RemoveUserFromTeamRequest) (*Team, error)
+	// Permission and Role management
+	CreatePermission(context.Context, *CreatePermissionRequest) (*Permission, error)
+	CreateRole(context.Context, *CreateRoleRequest) (*Role, error)
+	AssignRole(context.Context, *AssignRoleRequest) (*emptypb.Empty, error)
+	RevokeRole(context.Context, *RevokeRoleRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedBackendServiceServer()
 }
 
@@ -193,7 +309,7 @@ type BackendServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedBackendServiceServer struct{}
 
-func (UnimplementedBackendServiceServer) Version(context.Context, *VersionRequest) (*VersionResponse, error) {
+func (UnimplementedBackendServiceServer) Version(context.Context, *emptypb.Empty) (*VersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Version not implemented")
 }
 func (UnimplementedBackendServiceServer) Register(context.Context, *RegisterRequest) (*RegisterUserResponse, error) {
@@ -202,26 +318,53 @@ func (UnimplementedBackendServiceServer) Register(context.Context, *RegisterRequ
 func (UnimplementedBackendServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
+func (UnimplementedBackendServiceServer) CreateUser(context.Context, *CreateUserRequest) (*CreateUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUser not implemented")
+}
+func (UnimplementedBackendServiceServer) GetUser(context.Context, *GetUserRequest) (*User, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUser not implemented")
+}
+func (UnimplementedBackendServiceServer) UpdateUser(context.Context, *UpdateUserRequest) (*User, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateUser not implemented")
+}
+func (UnimplementedBackendServiceServer) DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteUser not implemented")
+}
 func (UnimplementedBackendServiceServer) GetOrganization(context.Context, *GetOrganizationRequest) (*Organization, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetOrganization not implemented")
 }
-func (UnimplementedBackendServiceServer) UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*UpdateOrganizationResponse, error) {
+func (UnimplementedBackendServiceServer) UpdateOrganization(context.Context, *UpdateOrganizationRequest) (*Organization, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateOrganization not implemented")
 }
-func (UnimplementedBackendServiceServer) CreateTeam(context.Context, *CreateTeamRequest) (*CreateTeamResponse, error) {
+func (UnimplementedBackendServiceServer) CreateTeam(context.Context, *CreateTeamRequest) (*Team, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateTeam not implemented")
 }
-func (UnimplementedBackendServiceServer) AddUserToTeam(context.Context, *AddUserToTeamRequest) (*AddUserToTeamResponse, error) {
+func (UnimplementedBackendServiceServer) GetTeam(context.Context, *GetTeamRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTeam not implemented")
+}
+func (UnimplementedBackendServiceServer) UpdateTeam(context.Context, *UpdateTeamRequest) (*Team, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateTeam not implemented")
+}
+func (UnimplementedBackendServiceServer) DeleteTeam(context.Context, *DeleteTeamRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTeam not implemented")
+}
+func (UnimplementedBackendServiceServer) AddUserToTeam(context.Context, *AddUserToTeamRequest) (*Team, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddUserToTeam not implemented")
 }
-func (UnimplementedBackendServiceServer) RemoveUserFromTeam(context.Context, *RemoveUserFromTeamRequest) (*RemoveUserFromTeamResponse, error) {
+func (UnimplementedBackendServiceServer) RemoveUserFromTeam(context.Context, *RemoveUserFromTeamRequest) (*Team, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveUserFromTeam not implemented")
 }
-func (UnimplementedBackendServiceServer) AssignPermission(context.Context, *AssignPermissionRequest) (*AssignPermissionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AssignPermission not implemented")
+func (UnimplementedBackendServiceServer) CreatePermission(context.Context, *CreatePermissionRequest) (*Permission, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreatePermission not implemented")
 }
-func (UnimplementedBackendServiceServer) RevokePermission(context.Context, *RevokePermissionRequest) (*RevokePermissionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RevokePermission not implemented")
+func (UnimplementedBackendServiceServer) CreateRole(context.Context, *CreateRoleRequest) (*Role, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateRole not implemented")
+}
+func (UnimplementedBackendServiceServer) AssignRole(context.Context, *AssignRoleRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AssignRole not implemented")
+}
+func (UnimplementedBackendServiceServer) RevokeRole(context.Context, *RevokeRoleRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RevokeRole not implemented")
 }
 func (UnimplementedBackendServiceServer) mustEmbedUnimplementedBackendServiceServer() {}
 func (UnimplementedBackendServiceServer) testEmbeddedByValue()                        {}
@@ -245,7 +388,7 @@ func RegisterBackendServiceServer(s grpc.ServiceRegistrar, srv BackendServiceSer
 }
 
 func _BackendService_Version_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VersionRequest)
+	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -257,7 +400,7 @@ func _BackendService_Version_Handler(srv interface{}, ctx context.Context, dec f
 		FullMethod: BackendService_Version_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackendServiceServer).Version(ctx, req.(*VersionRequest))
+		return srv.(BackendServiceServer).Version(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -294,6 +437,78 @@ func _BackendService_Login_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BackendServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_CreateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).CreateUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_CreateUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).CreateUser(ctx, req.(*CreateUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_GetUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).GetUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_GetUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).GetUser(ctx, req.(*GetUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_UpdateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).UpdateUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_UpdateUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).UpdateUser(ctx, req.(*UpdateUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_DeleteUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).DeleteUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_DeleteUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).DeleteUser(ctx, req.(*DeleteUserRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -352,6 +567,60 @@ func _BackendService_CreateTeam_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendService_GetTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).GetTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_GetTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).GetTeam(ctx, req.(*GetTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_UpdateTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).UpdateTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_UpdateTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).UpdateTeam(ctx, req.(*UpdateTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_DeleteTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTeamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).DeleteTeam(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_DeleteTeam_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).DeleteTeam(ctx, req.(*DeleteTeamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _BackendService_AddUserToTeam_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddUserToTeamRequest)
 	if err := dec(in); err != nil {
@@ -388,38 +657,74 @@ func _BackendService_RemoveUserFromTeam_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BackendService_AssignPermission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AssignPermissionRequest)
+func _BackendService_CreatePermission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePermissionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BackendServiceServer).AssignPermission(ctx, in)
+		return srv.(BackendServiceServer).CreatePermission(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BackendService_AssignPermission_FullMethodName,
+		FullMethod: BackendService_CreatePermission_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackendServiceServer).AssignPermission(ctx, req.(*AssignPermissionRequest))
+		return srv.(BackendServiceServer).CreatePermission(ctx, req.(*CreatePermissionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _BackendService_RevokePermission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RevokePermissionRequest)
+func _BackendService_CreateRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRoleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BackendServiceServer).RevokePermission(ctx, in)
+		return srv.(BackendServiceServer).CreateRole(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BackendService_RevokePermission_FullMethodName,
+		FullMethod: BackendService_CreateRole_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackendServiceServer).RevokePermission(ctx, req.(*RevokePermissionRequest))
+		return srv.(BackendServiceServer).CreateRole(ctx, req.(*CreateRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_AssignRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AssignRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).AssignRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_AssignRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).AssignRole(ctx, req.(*AssignRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendService_RevokeRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).RevokeRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendService_RevokeRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).RevokeRole(ctx, req.(*RevokeRoleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -444,6 +749,22 @@ var BackendService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BackendService_Login_Handler,
 		},
 		{
+			MethodName: "CreateUser",
+			Handler:    _BackendService_CreateUser_Handler,
+		},
+		{
+			MethodName: "GetUser",
+			Handler:    _BackendService_GetUser_Handler,
+		},
+		{
+			MethodName: "UpdateUser",
+			Handler:    _BackendService_UpdateUser_Handler,
+		},
+		{
+			MethodName: "DeleteUser",
+			Handler:    _BackendService_DeleteUser_Handler,
+		},
+		{
 			MethodName: "GetOrganization",
 			Handler:    _BackendService_GetOrganization_Handler,
 		},
@@ -456,6 +777,18 @@ var BackendService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BackendService_CreateTeam_Handler,
 		},
 		{
+			MethodName: "GetTeam",
+			Handler:    _BackendService_GetTeam_Handler,
+		},
+		{
+			MethodName: "UpdateTeam",
+			Handler:    _BackendService_UpdateTeam_Handler,
+		},
+		{
+			MethodName: "DeleteTeam",
+			Handler:    _BackendService_DeleteTeam_Handler,
+		},
+		{
 			MethodName: "AddUserToTeam",
 			Handler:    _BackendService_AddUserToTeam_Handler,
 		},
@@ -464,12 +797,20 @@ var BackendService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BackendService_RemoveUserFromTeam_Handler,
 		},
 		{
-			MethodName: "AssignPermission",
-			Handler:    _BackendService_AssignPermission_Handler,
+			MethodName: "CreatePermission",
+			Handler:    _BackendService_CreatePermission_Handler,
 		},
 		{
-			MethodName: "RevokePermission",
-			Handler:    _BackendService_RevokePermission_Handler,
+			MethodName: "CreateRole",
+			Handler:    _BackendService_CreateRole_Handler,
+		},
+		{
+			MethodName: "AssignRole",
+			Handler:    _BackendService_AssignRole_Handler,
+		},
+		{
+			MethodName: "RevokeRole",
+			Handler:    _BackendService_RevokeRole_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

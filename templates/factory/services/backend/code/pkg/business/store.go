@@ -8,38 +8,61 @@ import (
 
 type Store interface {
 
+	// Run in transaction
+
+	RunInTransaction(ctx context.Context, fn func(ctx context.Context) error) error
+
 	// User manipulation
 
-	// CreateUser creates a new user
-	CreateUser(ctx context.Context, user *gen.User) (*gen.User, error)
-
-	// GetUserByAuthID returns a user by the auth id
-	// - user, nil if found
-	// - nil, nil if not found
-	// - nil, err if something wrong
-	GetUserByAuthID(ctx context.Context, id string) (*gen.User, error)
-
-	// DeleteUser deletes a user by the auth id
-	// - user, nil if found
-	// - nil, nil if not found
-	// - nil, err if something wrong
-	DeleteUser(ctx context.Context, authSignupId string) (*gen.User, error)
+	CreateUser(ctx context.Context, user *gen.User) error
+	LinkUserWithAuth(ctx context.Context, id string, authID string) error
+	GetUserByAuthId(ctx context.Context, id string) (*gen.User, error)
+	GetUserById(ctx context.Context, id string) (*gen.User, error)
+	DeleteUser(ctx context.Context, id string) error
+	UpdateUser(ctx context.Context, user *gen.User) error
 
 	// Organization
 
-	GetOrganizationForOwner(ctx context.Context, user *gen.User) (*gen.Organization, error)
-
-	CreateOrganization(ctx context.Context, owner *gen.User, org *gen.Organization) (*gen.Organization, error)
-
-	DeleteOrganization(ctx context.Context, org *gen.Organization) error
+	CreateOrganization(ctx context.Context, org *gen.Organization) error
+	GetOrganization(ctx context.Context, id string) (*gen.Organization, error)
+	DeleteOrganization(ctx context.Context, id string) error
+	UpdateOrganization(ctx context.Context, org *gen.Organization) error
 
 	// Teams
 
-	CreateTeam(ctx context.Context, org *gen.Organization, team *gen.Team) (*gen.Team, error)
+	CreateTeam(ctx context.Context, orgID string, team *gen.Team) error
+	GetTeams(ctx context.Context, orgID string) ([]*gen.Team, error)
+	GetTeamByID(ctx context.Context, teamID string) (*gen.Team, error)
+	DeleteTeam(ctx context.Context, teamID string) error
+	UpdateTeam(ctx context.Context, team *gen.Team) error
 
-	GetTeams(ctx context.Context, org *gen.Organization) ([]*gen.Team, error)
+	// User-Organization relationships
 
-	// Add user to team
+	AddUserToOrganization(ctx context.Context, orgID string, userID string, roleID string) error
+	RemoveUserFromOrganization(ctx context.Context, orgID string, userID string) error
+	GetUsersInOrganization(ctx context.Context, orgID string) ([]*gen.User, error)
 
-	AddUserToTeam(ctx context.Context, team *gen.Team, user *gen.User) error
+	// User-Team relationships
+
+	AddUserToTeam(ctx context.Context, teamID string, userID string, roleID string) error
+	RemoveUserFromTeam(ctx context.Context, teamID string, userID string) error
+	GetUsersInTeam(ctx context.Context, teamID string) ([]*gen.User, error)
+
+	// Roles and Permissions
+
+	CreateRole(ctx context.Context, role *gen.Role) error
+	GetRoleByID(ctx context.Context, roleID string) (*gen.Role, error)
+	UpdateRole(ctx context.Context, role *gen.Role) error
+	DeleteRole(ctx context.Context, roleID string) error
+	GetAllRoles(ctx context.Context) ([]*gen.Role, error)
+
+	CreatePermission(ctx context.Context, permission *gen.Permission) error
+	GetPermissionByID(ctx context.Context, permissionID string) (*gen.Permission, error)
+	UpdatePermission(ctx context.Context, permission *gen.Permission) error
+	DeletePermission(ctx context.Context, permissionID string) error
+	GetAllPermissions(ctx context.Context) ([]*gen.Permission, error)
+
+	AssignPermissionToRole(ctx context.Context, roleID string, permissionID string) error
+	RemovePermissionFromRole(ctx context.Context, roleID string, permissionID string) error
+	GetPermissionsForRole(ctx context.Context, roleID string) ([]*gen.Permission, error)
 }

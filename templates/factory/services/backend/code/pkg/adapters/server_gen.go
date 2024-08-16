@@ -13,8 +13,8 @@ import (
 )
 
 type Server struct {
-	grpc *GrpcServer
-	rest *RestServer
+	Grpc *GrpcServer
+	Rest *RestServer
 }
 
 func NewServer(config *Configuration) (*Server, error) {
@@ -31,24 +31,24 @@ func NewServer(config *Configuration) (*Server, error) {
 		}
 	}
 	return &Server{
-		grpc: grpc,
-		rest: rest,
+		Grpc: grpc,
+		Rest: rest,
 	}, nil
 }
 
 func (server *Server) Start(ctx context.Context) error {
-	if server.rest != nil {
+	if server.Rest != nil {
 		go func() {
-			err := server.rest.Run(ctx)
+			err := server.Rest.Run(ctx)
 			if err != nil {
 				panic(err)
 			}
 		}()
 	}
-	return server.grpc.Run(ctx)
+	return server.Grpc.Run(ctx)
 }
 
 func (server *Server) Stop() {
 	fmt.Println("Stopping server...")
-	server.grpc.gRPC.GracefulStop()
+	server.Grpc.gRPC.GracefulStop()
 }

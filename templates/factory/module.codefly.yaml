@@ -3,3 +3,4 @@ name: users
 services:
     - name: store
     - name: backend
+    - name: cache
