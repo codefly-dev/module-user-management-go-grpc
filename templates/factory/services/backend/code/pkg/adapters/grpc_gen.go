@@ -15,9 +15,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/codefly-dev/core/wool"
-
-	"github.com/bufbuild/protovalidate-go"
+	"buf.build/go/protovalidate"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var validator *protovalidate.Validator
+var validator protovalidate.Validator
 
 func init() {
 	v, err := protovalidate.New()
@@ -48,42 +46,124 @@ func Validate(req proto.Message) error {
 	return nil
 }
 
-func (s *GrpcServer) Version(ctx context.Context, req *gen.VersionRequest) (*gen.VersionResponse, error) {
-	if err := Validate(req); err != nil {
-		return nil, err
-	}
-	return &gen.VersionResponse{
-		Version: codefly.Version(),
-	}, nil
-}
-
 type Configuration struct {
 	EndpointGrpcPort uint16
 	EndpointHttpPort *uint16
 }
 
+// UserServer handles UserService RPCs.
+type UserServer struct {
+	gen.UnsafeUserServiceServer
+}
+
+// OrgServer handles OrganizationService RPCs.
+type OrgServer struct {
+	gen.UnsafeOrganizationServiceServer
+}
+
+// TeamServer handles TeamService RPCs.
+type TeamServer struct {
+	gen.UnsafeTeamServiceServer
+}
+
+// PermServer handles PermissionService RPCs.
+type PermServer struct {
+	gen.UnsafePermissionServiceServer
+}
+
+// IdentServer handles IdentityService RPCs.
+type IdentServer struct {
+	gen.UnsafeIdentityServiceServer
+}
+
+// APIKeyServer handles APIKeyService RPCs.
+type APIKeyServer struct {
+	gen.UnsafeAPIKeyServiceServer
+}
+
+// AuthServer handles AuthService RPCs.
+type AuthServer struct {
+	gen.UnsafeAuthServiceServer
+}
+
+// AuditServer handles AuditService RPCs.
+type AuditServer struct {
+	gen.UnsafeAuditServiceServer
+}
+
+// InvitationServer handles InvitationService RPCs.
+type InvitationServer struct {
+	gen.UnsafeInvitationServiceServer
+}
+
+// AdminServer handles AdminService RPCs.
+type AdminServer struct {
+	gen.UnsafeAdminServiceServer
+}
+
+// GrpcServer wraps all service servers and manages the gRPC lifecycle.
 type GrpcServer struct {
-	gen.UnsafeBackendServiceServer
+	User   *UserServer
+	Org    *OrgServer
+	Team   *TeamServer
+	Perm   *PermServer
+	Ident  *IdentServer
+	APIKey *APIKeyServer
+	Auth   *AuthServer
+	Audit      *AuditServer
+	Invitation *InvitationServer
+	Admin      *AdminServer
+
 	configuration *Configuration
 	gRPC          *grpc.Server
-	validator     *protovalidate.Validator
+	validator     protovalidate.Validator
+}
+
+func (s *UserServer) Version(ctx context.Context, req *gen.VersionRequest) (*gen.VersionResponse, error) {
+	if err := Validate(req); err != nil {
+		return nil, err
+	}
+	return &gen.VersionResponse{
+		Version: codefly.ServiceVersion(),
+	}, nil
 }
 
 func NewGrpServer(c *Configuration) (*GrpcServer, error) {
-	grpcServer := grpc.NewServer(wool.GRPCInstrumentation()...)
+	grpcServer := grpc.NewServer()
 	v, err := protovalidate.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create validator: %w", err)
 	}
 
-	s := GrpcServer{
+	s := &GrpcServer{
+		User:          &UserServer{},
+		Org:           &OrgServer{},
+		Team:          &TeamServer{},
+		Perm:          &PermServer{},
+		Ident:         &IdentServer{},
+		APIKey:        &APIKeyServer{},
+		Auth:          &AuthServer{},
+		Audit:         &AuditServer{},
+		Invitation:    &InvitationServer{},
+		Admin:         &AdminServer{},
 		configuration: c,
 		gRPC:          grpcServer,
 		validator:     v,
 	}
-	gen.RegisterBackendServiceServer(grpcServer, &s)
+
+	gen.RegisterUserServiceServer(grpcServer, s.User)
+	gen.RegisterOrganizationServiceServer(grpcServer, s.Org)
+	gen.RegisterTeamServiceServer(grpcServer, s.Team)
+	gen.RegisterPermissionServiceServer(grpcServer, s.Perm)
+	gen.RegisterIdentityServiceServer(grpcServer, s.Ident)
+	gen.RegisterAPIKeyServiceServer(grpcServer, s.APIKey)
+	gen.RegisterAuthServiceServer(grpcServer, s.Auth)
+	gen.RegisterAuditServiceServer(grpcServer, s.Audit)
+	gen.RegisterInvitationServiceServer(grpcServer, s.Invitation)
+	gen.RegisterAdminServiceServer(grpcServer, s.Admin)
 	reflection.Register(grpcServer)
-	return &s, nil
+
+	return s, nil
 }
 
 func (s *GrpcServer) Run(ctx context.Context) error {

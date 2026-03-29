@@ -1,2 +1,9 @@
 name: users
 layout: flat
+services:
+    - name: store
+    - name: vault
+    - name: backend
+    - name: cache
+    - name: auth-sidecar
+    - name: admin-dashboard

@@ -4,19 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	codefly "github.com/codefly-dev/sdk-go"
-	"github.com/jackc/pgconn"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 
-	"github.com/jackc/pgx/v4"
+	codefly "github.com/codefly-dev/sdk-go"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"backend/pkg/gen"
 
 	"github.com/codefly-dev/core/wool"
 
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"backend/pkg/business"
 )
@@ -26,6 +27,29 @@ type Close func()
 type PostgresStore struct {
 	Close
 	pool *pgxpool.Pool
+}
+
+func NewPostgresStore(ctx context.Context) (*PostgresStore, error) {
+	w := wool.Get(ctx).In("NewPostgresStore")
+	connection, err := codefly.For(ctx).Service("store").Secret("postgres", "connection")
+	if err != nil {
+		return nil, w.Wrapf(err, "failed to get connection string")
+	}
+
+	poolConfig, err := pgxpool.ParseConfig(connection)
+	if err != nil {
+		return nil, w.Wrapf(err, "failed to parse connection string")
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+
+	if err != nil {
+		return nil, w.Wrapf(err, "failed to connect to database")
+	}
+	return &PostgresStore{
+		Close: pool.Close,
+		pool:  pool,
+	}, nil
 }
 
 var _ business.Store = (*PostgresStore)(nil)
@@ -58,9 +82,9 @@ func (s *PostgresStore) RunInTransaction(ctx context.Context, fn func(ctx contex
 }
 
 type QueryExecutor interface {
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 func (s *PostgresStore) getQueryExecutor(ctx context.Context) QueryExecutor {
@@ -71,594 +95,282 @@ func (s *PostgresStore) getQueryExecutor(ctx context.Context) QueryExecutor {
 	return s.pool
 }
 
-func (s *PostgresStore) CreateUser(ctx context.Context, user *gen.User) error {
-	w := wool.Get(ctx).In("CreateUser")
-
-	now := time.Now().UTC()
-
-	sql := `
-        INSERT INTO users (id, status, signed_up_at, last_login_at, email, profile)
-        VALUES ($1, $2, $3, $4, $5, $6)
-    `
-
-	profileJSON, err := json.Marshal(user.Profile)
-	if err != nil {
-		return w.Wrapf(err, "error marshaling user profile")
-	}
-
-	args := []interface{}{
-		user.Id,
-		user.Status,
-		now,
-		now,
-		user.Email,
-		profileJSON,
-	}
-
-	_, err = s.getQueryExecutor(ctx).Exec(ctx, sql, args...)
-	if err != nil {
-		return w.Wrapf(err, "error creating user")
-	}
-
-	return nil
-}
-
-func (s *PostgresStore) LinkUserWithAuth(ctx context.Context, id string, authID string) error {
-	w := wool.Get(ctx).In("LinkUserWithAuth")
-
-	sql := `
-		INSERT INTO users_auth (user_id, auth_id)
-		VALUES ($1, $2)
-	`
-
-	_, err := s.getQueryExecutor(ctx).Exec(ctx, sql, id, authID)
-	if err != nil {
-		return w.Wrapf(err, "error linking user with auth")
-	}
-
-	return nil
-}
-
-func (s *PostgresStore) GetUserByAuthId(ctx context.Context, authID string) (*gen.User, error) {
-	w := wool.Get(ctx).In("GetUserByAuthId")
-
-	// First, get the user_id from users_auth table
-	sql := `
-        SELECT user_id
-        FROM users_auth
-        WHERE auth_id = $1
-    `
-
-	var id string
-	err := s.getQueryExecutor(ctx).QueryRow(ctx, sql, authID).Scan(&id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil // User not found, return nil without error
-		}
-		return nil, w.Wrapf(err, "error querying users_auth table")
-	}
-
-	sql = `
-        SELECT id, status, signed_up_at, last_login_at, email, profile
-        FROM users
-        WHERE id = $1
-    `
+func (s *PostgresStore) GetUserByIdentity(ctx context.Context, identity *gen.UserIdentity) (*gen.User, error) {
+	w := wool.Get(ctx).In("GetUserByIdentity")
+	executor := s.getQueryExecutor(ctx)
 
 	var user gen.User
-	var profileJSON []byte
-	var signedUpAt, lastLoginAt time.Time
+	query := `
+        SELECT u.uuid, u.primary_email, u.created_at, u.updated_at, u.last_login, 
+               u.status, u.profile, u.email_verified
+        FROM users u
+        JOIN user_identities ui ON u.uuid = ui.user_uuid
+        WHERE ui.provider = $1 AND ui.provider_id = $2`
 
-	err = s.getQueryExecutor(ctx).QueryRow(ctx, sql, id).Scan(
-		&user.Id,
-		&user.Status,
-		&signedUpAt,
-		&lastLoginAt,
-		&user.Email,
-		&profileJSON,
+	var (
+		createdAt time.Time
+		updatedAt time.Time
+		lastLogin *time.Time
+		profile   []byte // for JSONB
+		status    string
 	)
 
+	err := executor.QueryRow(ctx, query, identity.Provider, identity.ProviderId).Scan(
+		&user.Uuid,
+		&user.PrimaryEmail,
+		&createdAt,
+		&updatedAt,
+		&lastLogin,
+		&status,
+		&profile,
+		&user.EmailVerified,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil // User not found, return nil without error
+			return nil, nil
 		}
-		return nil, w.Wrapf(err, "error querying user")
+		return nil, w.Wrapf(err, "failed to scan user")
 	}
 
-	user.SignedUpAt = timestamppb.New(signedUpAt)
-	user.LastLoginAt = timestamppb.New(lastLoginAt)
+	// Convert timestamps to protobuf
+	user.CreatedAt = timestamppb.New(createdAt)
+	user.UpdatedAt = timestamppb.New(updatedAt)
+	if lastLogin != nil {
+		user.LastLogin = timestamppb.New(*lastLogin)
+	}
 
-	// Unmarshal profile JSON
-	if len(profileJSON) > 0 {
-		var profile gen.UserProfile
-		if err := json.Unmarshal(profileJSON, &profile); err != nil {
-			return nil, w.Wrapf(err, "error unmarshaling user profile")
+	// Parse status
+	user.Status = parseUserStatus(status)
+
+	// Parse profile JSONB
+	if len(profile) > 0 {
+		profileMap := make(map[string]string)
+		if err := json.Unmarshal(profile, &profileMap); err != nil {
+			return nil, w.Wrapf(err, "failed to unmarshal profile")
 		}
-		user.Profile = &profile
+		user.Profile = profileMap
 	}
 
 	return &user, nil
 }
+func (s *PostgresStore) RegisterUser(ctx context.Context, user *gen.User, identity *gen.UserIdentity) error {
+	w := wool.Get(ctx).In("RegisterUser")
 
-func (s *PostgresStore) GetUserById(ctx context.Context, id string) (*gen.User, error) {
-	//TODO implement me
-	panic("implement me")
-}
+	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{
+		IsoLevel: pgx.Serializable,
+	}, func(tx pgx.Tx) error {
+		ctx = context.WithValue(ctx, "tx", tx)
+		executor := s.getQueryExecutor(ctx)
 
-func (s *PostgresStore) DeleteUser(ctx context.Context, id string) error {
-	//TODO implement me
-	panic("implement me")
-}
+		// First check if this identity already exists
+		var existingUserUUID string
+		err := executor.QueryRow(ctx, `
+            SELECT user_uuid 
+            FROM user_identities 
+            WHERE provider = $1 AND provider_id = $2`,
+			identity.Provider,
+			identity.ProviderId,
+		).Scan(&existingUserUUID)
 
-func (s *PostgresStore) UpdateUser(ctx context.Context, user *gen.User) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) CreateOrganization(ctx context.Context, org *gen.Organization) error {
-	w := wool.Get(ctx).In("CreateOrganization")
-
-	sql := `
-        INSERT INTO organizations (id, name, domain)
-        VALUES ($1, $2, $3)
-    `
-
-	_, err := s.getQueryExecutor(ctx).Exec(ctx, sql, org.Id, org.Name, org.Domain)
-	if err != nil {
-		return w.Wrapf(err, "error creating organization")
-	}
-
-	return nil
-}
-
-func (s *PostgresStore) GetOrganization(ctx context.Context, id string) (*gen.Organization, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) DeleteOrganization(ctx context.Context, id string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) UpdateOrganization(ctx context.Context, org *gen.Organization) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) CreateTeam(ctx context.Context, orgID string, team *gen.Team) error {
-	w := wool.Get(ctx).In("CreateTeam")
-
-	sql := `
-        INSERT INTO teams (id, name, organization_id)
-        VALUES ($1, $2, $3)
-    `
-
-	_, err := s.getQueryExecutor(ctx).Exec(ctx, sql, team.Id, team.Name, orgID)
-	if err != nil {
-		return w.Wrapf(err, "error creating team")
-	}
-
-	// If the team has members, add them to the team
-	if len(team.MemberIds) > 0 {
-		insertMemberSQL := `
-            INSERT INTO user_teams (team_id, user_id)
-            VALUES ($1, $2)
-        `
-
-		for _, memberID := range team.MemberIds {
-			_, err := s.getQueryExecutor(ctx).Exec(ctx, insertMemberSQL, team.Id, memberID)
-			if err != nil {
-				return w.Wrapf(err, "error adding member to team")
-			}
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return w.Wrapf(err, "failed to check existing identity")
 		}
-	}
 
-	return nil
+		// If identity exists, return AlreadyExists error
+		if existingUserUUID != "" {
+			return status.Errorf(codes.AlreadyExists,
+				"user already exists with provider %s and id %s",
+				identity.Provider, identity.ProviderId)
+		}
+
+		// If it's a new identity, check if email is already registered
+		var existingEmailUserUUID string
+		err = executor.QueryRow(ctx, `
+            SELECT uuid 
+            FROM users 
+            WHERE primary_email = $1`,
+			user.PrimaryEmail,
+		).Scan(&existingEmailUserUUID)
+
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return w.Wrapf(err, "failed to check existing email")
+		}
+
+		// If email exists, might want to handle linking instead of error
+		if existingEmailUserUUID != "" {
+			return status.Errorf(codes.AlreadyExists,
+				"email %s is already registered",
+				user.PrimaryEmail)
+		}
+
+		// Create new user
+		profileJSON, err := json.Marshal(user.Profile)
+		if err != nil {
+			return w.Wrapf(err, "failed to marshal profile")
+		}
+
+		_, err = executor.Exec(ctx, `
+            INSERT INTO users (
+                uuid, primary_email, created_at, updated_at, status,
+                profile, email_verified
+            ) VALUES (
+                $1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, $3,
+                $4, $5
+            )`,
+			user.Uuid,
+			user.PrimaryEmail,
+			userStatusToString(user.Status),
+			profileJSON,
+			identity.EmailVerified, // Use identity's email verification status
+		)
+		if err != nil {
+			return w.Wrapf(err, "failed to insert user")
+		}
+
+		// Create the identity
+		providerDataJSON, err := json.Marshal(identity.ProviderData)
+		if err != nil {
+			return w.Wrapf(err, "failed to marshal provider data")
+		}
+
+		_, err = executor.Exec(ctx, `
+            INSERT INTO user_identities (
+                uuid, user_uuid, provider, provider_id, provider_email,
+                created_at, provider_data, email_verified
+            ) VALUES (
+                $1, $2, $3, $4, $5,
+                CURRENT_TIMESTAMP, $6, $7
+            )`,
+			identity.Uuid,
+			user.Uuid,
+			identity.Provider,
+			identity.ProviderId,
+			identity.ProviderEmail,
+			providerDataJSON,
+			identity.EmailVerified,
+		)
+		if err != nil {
+			return w.Wrapf(err, "failed to insert identity")
+		}
+
+		return nil
+	})
 }
 
-// CreateRole creates a new role in the database
-func (s *PostgresStore) CreateRole(ctx context.Context, role *gen.Role) error {
-	w := wool.Get(ctx).In("CreateRole")
+func (s *PostgresStore) LinkIdentity(ctx context.Context, userUUID string, identity *gen.UserIdentity) error {
+	w := wool.Get(ctx).In("LinkIdentity")
 
-	sql := `
-        INSERT INTO roles (id, name)
-        VALUES ($1, $2)
-    `
+	return pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{
+		IsoLevel: pgx.Serializable,
+	}, func(tx pgx.Tx) error {
+		ctx = context.WithValue(ctx, "tx", tx)
+		executor := s.getQueryExecutor(ctx)
 
-	_, err := s.getQueryExecutor(ctx).Exec(ctx, sql, role.Id, role.Name)
+		// Check if identity already exists
+		var existingUserUUID string
+		err := executor.QueryRow(ctx, `
+            SELECT user_uuid 
+            FROM user_identities 
+            WHERE provider = $1 AND provider_id = $2`,
+			identity.Provider,
+			identity.ProviderId,
+		).Scan(&existingUserUUID)
+
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return w.Wrapf(err, "failed to check existing identity")
+		}
+
+		if existingUserUUID != "" {
+			return status.Errorf(codes.AlreadyExists,
+				"identity already exists with provider %s and id %s",
+				identity.Provider, identity.ProviderId)
+		}
+
+		// Create the new identity
+		providerDataJSON, err := json.Marshal(identity.ProviderData)
+		if err != nil {
+			return w.Wrapf(err, "failed to marshal provider data")
+		}
+
+		_, err = executor.Exec(ctx, `
+            INSERT INTO user_identities (
+                uuid, user_uuid, provider, provider_id, provider_email,
+                created_at, provider_data, email_verified
+            ) VALUES (
+                $1, $2, $3, $4, $5,
+                CURRENT_TIMESTAMP, $6, $7
+            )`,
+			identity.Uuid,
+			userUUID,
+			identity.Provider,
+			identity.ProviderId,
+			identity.ProviderEmail,
+			providerDataJSON,
+			identity.EmailVerified,
+		)
+		if err != nil {
+			return w.Wrapf(err, "failed to insert identity")
+		}
+
+		return nil
+	})
+}
+
+func (s *PostgresStore) ClearAll(ctx context.Context) error {
+	w := wool.Get(ctx).In("ClearAll")
+	executor := s.getQueryExecutor(ctx)
+
+	// Clean all user data but preserve built-in roles.
+	// Use DELETE instead of TRUNCATE to avoid CASCADE wiping roles table.
+	for _, stmt := range []string{
+		"DELETE FROM role_assignments",
+		"DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE NOT built_in)",
+		"DELETE FROM roles WHERE NOT built_in",
+		"DELETE FROM team_members",
+		"DELETE FROM teams",
+		"DELETE FROM organization_members",
+		"DELETE FROM organizations",
+		"DELETE FROM user_identities",
+		"DELETE FROM users",
+	} {
+		_, _ = executor.Exec(ctx, stmt)
+	}
+	var err error
 	if err != nil {
-		return w.Wrapf(err, "error creating role")
+		return w.Wrapf(err, "failed to truncate tables")
 	}
 
-	return nil
-}
-
-// CreatePermission creates a new permission in the database
-func (s *PostgresStore) CreatePermission(ctx context.Context, permission *gen.Permission) error {
-	w := wool.Get(ctx).In("CreatePermission")
-
-	sql := `
-        INSERT INTO permissions (id, name, resource, access)
-        VALUES ($1, $2, $3, $4)
-    `
-
-	_, err := s.getQueryExecutor(ctx).Exec(ctx, sql, permission.Id, permission.Name, permission.Resource, permission.Access)
-	if err != nil {
-		return w.Wrapf(err, "error creating permission")
-	}
-
-	return nil
-}
-
-// AssignPermissionToRole assigns a permission to a role
-func (s *PostgresStore) AssignPermissionToRole(ctx context.Context, roleID, permissionID string) error {
-	w := wool.Get(ctx).In("AssignPermissionToRole")
-
-	// Check if the assignment already exists
-	checkSQL := `
-        SELECT EXISTS (
-            SELECT 1 FROM role_permissions 
-            WHERE role_id = $1 AND permission_id = $2
-        )
-    `
-	var exists bool
-	err := s.getQueryExecutor(ctx).QueryRow(ctx, checkSQL, roleID, permissionID).Scan(&exists)
-	if err != nil {
-		return w.Wrapf(err, "error checking existing permission assignment")
-	}
-	if exists {
-		return w.Wrapf(err, "permission is already assigned to role")
-	}
-
-	// If not exists, proceed with insertion
-	insertSQL := `
-        INSERT INTO role_permissions (role_id, permission_id)
-        VALUES ($1, $2)
-    `
-
-	_, err = s.getQueryExecutor(ctx).Exec(ctx, insertSQL, roleID, permissionID)
-	if err != nil {
-		return w.Wrapf(err, "error assigning permission to role")
-	}
-	return nil
-}
-
-func (s *PostgresStore) GetTeams(ctx context.Context, orgID string) ([]*gen.Team, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetTeamByID(ctx context.Context, teamID string) (*gen.Team, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) DeleteTeam(ctx context.Context, teamID string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) UpdateTeam(ctx context.Context, team *gen.Team) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) AddUserToOrganization(ctx context.Context, orgID string, userID string, roleID string) error {
-	w := wool.Get(ctx).In("AddUserToOrganization")
-	// Check if the user is already in the organization
-	checkSQL := `
-        SELECT EXISTS (
-            SELECT 1 FROM organization_users 
-            WHERE organization_id = $1 AND user_id = $2
-        )
-    `
-	var exists bool
-	err := s.getQueryExecutor(ctx).QueryRow(ctx, checkSQL, orgID, userID).Scan(&exists)
-	if err != nil {
-		return w.Wrapf(err, "error checking existing user in organization")
-	}
-	if exists {
-		return w.Wrapf(err, "user is already in the organization")
-	}
-
-	sql := `
-        INSERT INTO organization_users (organization_id, user_id, role, joined_at)
-        VALUES ($1, $2, $3, $4)
-    `
-
-	joinedAt := time.Now().UTC()
-	_, err = s.getQueryExecutor(ctx).Exec(ctx, sql, orgID, userID, roleID, joinedAt)
-	if err != nil {
-		return w.Wrapf(err, "error adding user to organization")
-	}
-	return nil
-}
-
-func (s *PostgresStore) RemoveUserFromOrganization(ctx context.Context, orgID string, userID string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetUsersInOrganization(ctx context.Context, orgID string) ([]*gen.User, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) AddUserToTeam(ctx context.Context, teamID string, userID string, roleID string) error {
-	w := wool.Get(ctx).In("AddUserToTeam")
-
-	// Validate team exists
-	if err := s.validateEntityExists(ctx, "teams", teamID); err != nil {
-		return w.Wrapf(err, "invalid team ID")
-	}
-
-	// Validate user exists
-	if err := s.validateEntityExists(ctx, "users", userID); err != nil {
-		return w.Wrapf(err, "invalid user ID")
-	}
-
-	// Validate role exists
-	if err := s.validateEntityExists(ctx, "roles", roleID); err != nil {
-		return w.Wrapf(err, "invalid role ID")
-	}
-
-	// First, check if the user is already in the team
-	checkSQL := `
-        SELECT EXISTS (
-            SELECT 1 FROM team_members 
-            WHERE team_id = $1 AND user_id = $2
-        )
-    `
-	var exists bool
-	err := s.getQueryExecutor(ctx).QueryRow(ctx, checkSQL, teamID, userID).Scan(&exists)
-	if err != nil {
-		return w.Wrapf(err, "error checking existing user in team")
-	}
-	if exists {
-		return w.Wrapf(nil, "user is already in the team")
-	}
-
-	// If the user is not in the team, add them
-	insertSQL := `
-        INSERT INTO team_members (team_id, user_id, role_id, joined_at)
-        VALUES ($1, $2, $3, $4)
-    `
-
-	joinedAt := time.Now().UTC()
-	_, err = s.getQueryExecutor(ctx).Exec(ctx, insertSQL, teamID, userID, roleID, joinedAt)
-	if err != nil {
-		return w.Wrapf(err, "error adding user to team")
-	}
 	return nil
 
 }
 
-func (s *PostgresStore) validateEntityExists(ctx context.Context, table, id string) error {
-	sql := fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s WHERE id = $1)", table)
-	var exists bool
-	err := s.getQueryExecutor(ctx).QueryRow(ctx, sql, id).Scan(&exists)
-	if err != nil {
-		return err
+// Helper functions for status conversion
+func parseUserStatus(status string) gen.UserStatus {
+	switch status {
+	case "active":
+		return gen.UserStatus_USER_STATUS_ACTIVE
+	case "inactive":
+		return gen.UserStatus_USER_STATUS_INACTIVE
+	case "suspended":
+		return gen.UserStatus_USER_STATUS_SUSPENDED
+	case "deleted":
+		return gen.UserStatus_USER_STATUS_DELETED
+	default:
+		return gen.UserStatus_USER_STATUS_UNSPECIFIED
 	}
-	if !exists {
-		return fmt.Errorf("%s with id %s does not exist", table, id)
+}
+
+func userStatusToString(status gen.UserStatus) string {
+	switch status {
+	case gen.UserStatus_USER_STATUS_ACTIVE:
+		return "active"
+	case gen.UserStatus_USER_STATUS_INACTIVE:
+		return "inactive"
+	case gen.UserStatus_USER_STATUS_SUSPENDED:
+		return "suspended"
+	case gen.UserStatus_USER_STATUS_DELETED:
+		return "deleted"
+	default:
+		return "active" // Default to active for new users
 	}
-	return nil
-}
-
-func (s *PostgresStore) RemoveUserFromTeam(ctx context.Context, teamID string, userID string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetUsersInTeam(ctx context.Context, teamID string) ([]*gen.User, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetRoleByID(ctx context.Context, roleID string) (*gen.Role, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) UpdateRole(ctx context.Context, role *gen.Role) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) DeleteRole(ctx context.Context, roleID string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetAllRoles(ctx context.Context) ([]*gen.Role, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetPermissionByID(ctx context.Context, permissionID string) (*gen.Permission, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) UpdatePermission(ctx context.Context, permission *gen.Permission) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) DeletePermission(ctx context.Context, permissionID string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetAllPermissions(ctx context.Context) ([]*gen.Permission, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) RemovePermissionFromRole(ctx context.Context, roleID string, permissionID string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetPermissionsForRole(ctx context.Context, roleID string) ([]*gen.Permission, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) HasPermission(ctx context.Context, userID string, resourceType string, resourceID string, permissionName string) (bool, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *PostgresStore) GetUserRoles(ctx context.Context, userID string, resourceType string, resourceID string) ([]*gen.Role, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-//	func (p *PostgresStore) GetOrganization(ctx context.Context, id string) (*gen.Organization, error) {
-//		w := wool.Get(ctx).In("GetOrganization")
-//		sql := `SELECT id, name FROM organizations WHERE id = $1`
-//		row := p.pool.QueryRow(ctx, sql, id)
-//		var id string
-//		var name string
-//		err := row.Scan(&id, &name)
-//		if err != nil {
-//			if errors.Is(err, pgx.ErrNoRows) {
-//				return nil, nil
-//			}
-//			return nil, w.Wrapf(err, "cannot get organization")
-//		}
-//		return &gen.Organization{
-//			Id:   id,
-//			Name: name,
-//		}, nil
-//	}
-//
-//	func (p *PostgresStore) CreateOrganization(ctx context.Context, owner *gen.User, org *gen.Organization) error {
-//		w := wool.Get(ctx).In("CreateOrganization")
-//		sql := `INSERT INTO organizations (id, name, owner) VALUES ($1, $2, $3)`
-//		args := []any{org.Id, org.Name, owner.Id}
-//		_, err := p.pool.Exec(ctx, sql, args...)
-//		if err != nil {
-//			return w.Wrapf(err, "cannot create organization")
-//		}
-//		return nil
-//	}
-//
-//	func (p *PostgresStore) DeleteOrganization(ctx context.Context, id string) error {
-//		w := wool.Get(ctx).In("DeleteOrganization")
-//		sql := `DELETE FROM organizations WHERE id = $1`
-//		_, err := p.pool.Exec(ctx, sql, id)
-//		if err != nil {
-//			return w.Wrapf(err, "cannot delete organization")
-//		}
-//		return nil
-//	}
-//
-//	func (p *PostgresStore) DeleteUser(ctx context.Context, id string) error {
-//		sql := `DELETE FROM users WHERE id = $1`
-//		_, err := p.pool.Exec(ctx, sql, id)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	}
-//
-//	func (p *PostgresStore) CreateTeam(ctx context.Context, team *gen.Team) error {
-//		sql := `INSERT INTO teams (id, name, organization_id) VALUES ($1, $2, $3)`
-//		args := []any{team.Id, team.Name, org.Id}
-//		_, err := p.pool.Exec(ctx, sql, args...)
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	}
-//
-//	func (p *PostgresStore) GetTeams(ctx context.Context, org *gen.Organization) ([]*gen.Team, error) {
-//		sql := `SELECT id, name FROM teams WHERE organization_id = $1`
-//		rows, err := p.pool.Query(ctx, sql, org.Id)
-//		if err != nil {
-//			return nil, err
-//		}
-//		defer rows.Close()
-//
-//		var teams []*gen.Team
-//		for rows.Next() {
-//			var team gen.Team
-//			err := rows.Scan(&team.Id, &team.Name)
-//			if err != nil {
-//				return nil, err
-//			}
-//			teams = append(teams, &team)
-//		}
-//		if err = rows.Err(); err != nil {
-//			return nil, err
-//		}
-//		return teams, nil
-//	}
-//
-//	func (p *PostgresStore) DeleteTeam(ctx context.Context, team *gen.Team) error {
-//		sql := `DELETE FROM teams WHERE id = $1`
-//		_, err := p.pool.Exec(ctx, sql, team.Id)
-//		if err != nil {
-//			return fmt.Errorf("error deleting team: %w", err)
-//		}
-//		return nil
-//	}
-//
-//	func (p *PostgresStore) AddUserToTeam(ctx context.Context, team *gen.Team, user *gen.User) error {
-//		sql := `INSERT INTO team_users (team_id, user_id) VALUES ($1, $2)`
-//		args := []any{team.Id, user.Id}
-//		_, err := p.pool.Exec(ctx, sql, args...)
-//		return err
-//	}
-//
-//	func (p *PostgresStore) assignPermission(ctx context.Context, table string, entityId string, permission *gen.Permission) error {
-//		// Insert the permission into the permissions table if it does not exist
-//		sql := `INSERT INTO permissions (id, name, resource, access) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING`
-//		args := []any{permission.Id, permission.Name, permission.Resource, permission.Access}
-//		_, err := p.pool.Exec(ctx, sql, args...)
-//		if err != nil {
-//			return fmt.Errorf("error inserting permission: %w", err)
-//		}
-//
-//		// Insert the association into the appropriate table
-//		sql = fmt.Sprintf(`INSERT INTO %s_permissions (entity_id, permission_id) VALUES ($1, $2)`, table)
-//		args = []any{entityId, permission.Id}
-//		_, err = p.pool.Exec(ctx, sql, args...)
-//		if err != nil {
-//			return fmt.Errorf("error assigning permission: %w", err)
-//		}
-//		return nil
-//	}
-//
-//	func (p *PostgresStore) AssignTeamPermission(ctx context.Context, team *gen.Team, permission *gen.Permission) error {
-//		return p.assignPermission(ctx, "team", team.Id, permission)
-//	}
-//
-//	func (p *PostgresStore) AssignUserPermission(ctx context.Context, user *gen.User, permission *gen.Permission) error {
-//		return p.assignPermission(ctx, "user", user.Id, permission)
-//	}
-func NewPostgresStore(ctx context.Context) (*PostgresStore, error) {
-	w := wool.Get(ctx).In("NewPostgresStore")
-	connection, err := codefly.For(ctx).Service("store").Secret("postgres", "connection")
-	if err != nil {
-		return nil, w.Wrapf(err, "failed to get connection string")
-	}
-
-	poolConfig, err := pgxpool.ParseConfig(connection)
-	if err != nil {
-		return nil, w.Wrapf(err, "failed to parse connection string")
-	}
-
-	pool, err := pgxpool.ConnectConfig(ctx, poolConfig)
-	if err != nil {
-		return nil, w.Wrapf(err, "failed to connect to database")
-	}
-	store := &PostgresStore{
-		pool:  pool,
-		Close: pool.Close,
-	}
-	return store, nil
 }

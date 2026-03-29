@@ -2,67 +2,128 @@ package business
 
 import (
 	"context"
+	"time"
 
 	"backend/pkg/gen"
 )
 
 type Store interface {
-
-	// Run in transaction
-
+	// Transactions
 	RunInTransaction(ctx context.Context, fn func(ctx context.Context) error) error
 
-	// User manipulation
+	// Users
+	RegisterUser(ctx context.Context, user *gen.User, identity *gen.UserIdentity) error
+	GetUserByIdentity(ctx context.Context, id *gen.UserIdentity) (*gen.User, error)
 
-	CreateUser(ctx context.Context, user *gen.User) error
-	LinkUserWithAuth(ctx context.Context, id string, authID string) error
-	GetUserByAuthId(ctx context.Context, id string) (*gen.User, error)
-	GetUserById(ctx context.Context, id string) (*gen.User, error)
-	DeleteUser(ctx context.Context, id string) error
-	UpdateUser(ctx context.Context, user *gen.User) error
-
-	// Organization
-
+	// Organizations
 	CreateOrganization(ctx context.Context, org *gen.Organization) error
 	GetOrganization(ctx context.Context, id string) (*gen.Organization, error)
-	DeleteOrganization(ctx context.Context, id string) error
-	UpdateOrganization(ctx context.Context, org *gen.Organization) error
+	ListOrganizationsForUser(ctx context.Context, userID string) ([]*gen.Organization, error)
+	AddOrgMember(ctx context.Context, orgID string, userID string, role string) error
+	RemoveOrgMember(ctx context.Context, orgID string, userID string) error
+	ListOrgMembers(ctx context.Context, orgID string) ([]*gen.OrgMembership, error)
 
 	// Teams
+	CreateTeam(ctx context.Context, team *gen.Team) error
+	ListTeams(ctx context.Context, orgID string) ([]*gen.Team, error)
+	AddTeamMember(ctx context.Context, teamID string, userID string, role string) error
+	RemoveTeamMember(ctx context.Context, teamID string, userID string) error
+	ListTeamMembers(ctx context.Context, teamID string) ([]*gen.TeamMembership, error)
 
-	CreateTeam(ctx context.Context, orgID string, team *gen.Team) error
-	GetTeams(ctx context.Context, orgID string) ([]*gen.Team, error)
-	GetTeamByID(ctx context.Context, teamID string) (*gen.Team, error)
-	DeleteTeam(ctx context.Context, teamID string) error
-	UpdateTeam(ctx context.Context, team *gen.Team) error
-
-	// User-Organization relationships
-
-	AddUserToOrganization(ctx context.Context, orgID string, userID string, roleID string) error
-	RemoveUserFromOrganization(ctx context.Context, orgID string, userID string) error
-	GetUsersInOrganization(ctx context.Context, orgID string) ([]*gen.User, error)
-
-	// User-Team relationships
-
-	AddUserToTeam(ctx context.Context, teamID string, userID string, roleID string) error
-	RemoveUserFromTeam(ctx context.Context, teamID string, userID string) error
-	GetUsersInTeam(ctx context.Context, teamID string) ([]*gen.User, error)
-
-	// Roles and Permissions
-
+	// Roles
 	CreateRole(ctx context.Context, role *gen.Role) error
-	GetRoleByID(ctx context.Context, roleID string) (*gen.Role, error)
-	UpdateRole(ctx context.Context, role *gen.Role) error
+	ListRoles(ctx context.Context, orgID string) ([]*gen.Role, error)
 	DeleteRole(ctx context.Context, roleID string) error
-	GetAllRoles(ctx context.Context) ([]*gen.Role, error)
 
-	CreatePermission(ctx context.Context, permission *gen.Permission) error
-	GetPermissionByID(ctx context.Context, permissionID string) (*gen.Permission, error)
-	UpdatePermission(ctx context.Context, permission *gen.Permission) error
-	DeletePermission(ctx context.Context, permissionID string) error
-	GetAllPermissions(ctx context.Context) ([]*gen.Permission, error)
+	// Role assignments
+	AssignRole(ctx context.Context, assignment *gen.RoleAssignment) error
+	RevokeRole(ctx context.Context, subjectID string, roleID string, orgID string, scope string) error
 
-	AssignPermissionToRole(ctx context.Context, roleID string, permissionID string) error
-	RemovePermissionFromRole(ctx context.Context, roleID string, permissionID string) error
-	GetPermissionsForRole(ctx context.Context, roleID string) ([]*gen.Permission, error)
+	// Permission checking
+	CheckPermission(ctx context.Context, subjectID string, subjectKind gen.SubjectKind, resource string, action string, orgID string, scope string) (bool, string, error)
+
+	// Identity resolution
+	ResolveIdentity(ctx context.Context, provider string, providerID string) (userID string, orgID string, roles []string, found bool, err error)
+
+	// API Keys
+	CreateAPIKey(ctx context.Context, key *gen.APIKey, keyHash string) error
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (*gen.APIKey, error)
+	ListAPIKeys(ctx context.Context, orgID string, pageSize int32, pageToken string) ([]*gen.APIKey, string, error)
+	RevokeAPIKey(ctx context.Context, keyID string) error
+	TouchAPIKeyUsage(ctx context.Context, keyID string, ip string) error
+
+	// Audit
+	InsertAuditEvent(ctx context.Context, entry AuditEntry) error
+	QueryAuditLog(ctx context.Context, orgID, actorID, action, resource, resourceID string,
+		from, to *time.Time, pageSize int32, pageToken string) ([]AuditEntry, string, int32, error)
+
+	// Invitations
+	CreateInvitation(ctx context.Context, inv *Invitation) error
+	GetInvitationByTokenHash(ctx context.Context, hash string) (*Invitation, error)
+	ListInvitations(ctx context.Context, orgID string, status string) ([]*Invitation, error)
+	UpdateInvitationStatus(ctx context.Context, id string, status string, acceptedBy string) error
+	CountPendingInvitations(ctx context.Context, orgID string) (int32, error)
+
+	// Entitlements
+	GetOrgPlanID(ctx context.Context, orgID string) (string, error)
+	GetPlanEntitlement(ctx context.Context, planID string, feature string) (int64, error)
+	GetEntitlementOverride(ctx context.Context, orgID string, feature string) (*EntitlementOverride, error)
+	CreateEntitlementOverride(ctx context.Context, override *EntitlementOverride) error
+	GetUsageForPeriod(ctx context.Context, orgID string, feature string, period string) (int64, error)
+	RecordUsage(ctx context.Context, orgID string, feature string, quantity int64, period string) error
+	GetSubscription(ctx context.Context, orgID string) (*Subscription, error)
+	CreateSubscription(ctx context.Context, sub *Subscription) error
+	UpdateSubscription(ctx context.Context, sub *Subscription) error
+
+	// Feature Flags
+	GetFeatureFlag(ctx context.Context, name string) (*FeatureFlag, error)
+	ListFeatureFlags(ctx context.Context) ([]*FeatureFlag, error)
+	UpsertFeatureFlag(ctx context.Context, flag *FeatureFlag) error
+
+	// Sessions
+	CreateSession(ctx context.Context, session *Session) error
+	GetSessionByRefreshTokenHash(ctx context.Context, hash string) (*Session, error)
+	RevokeSession(ctx context.Context, sessionID string, reason string) error
+	RevokeSessionFamily(ctx context.Context, familyID string, reason string) error
+	RevokeAllUserSessions(ctx context.Context, userID string, reason string) error
+	UpdateSessionActivity(ctx context.Context, sessionID string) error
+}
+
+type StoreErrorType string
+
+const (
+	ErrTypeNotFound StoreErrorType = "not_found"
+	ErrTypeConflict StoreErrorType = "conflict"
+	ErrTypeInternal StoreErrorType = "internal"
+)
+
+type StoreError struct {
+	Err error
+	StoreErrorType
+}
+
+func (e *StoreError) Error() string {
+	return e.Err.Error()
+}
+
+func NewStoreError(err error, t StoreErrorType) *StoreError {
+	return &StoreError{
+		Err:            err,
+		StoreErrorType: t,
+	}
+}
+
+// Session represents a refresh token session.
+type Session struct {
+	ID               string
+	UserID           string
+	RefreshTokenHash string
+	FamilyID         string
+	DeviceInfo       map[string]string
+	IPAddress        string
+	CreatedAt        time.Time
+	LastActiveAt     time.Time
+	ExpiresAt        time.Time
+	RevokedAt        *time.Time
+	RevokedReason    string
 }

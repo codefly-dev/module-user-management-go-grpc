@@ -26,8 +26,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/codefly-dev/core/wool"
-
 	"github.com/codefly-dev/core/shared"
 	"github.com/codefly-dev/core/standards"
 
@@ -51,12 +49,6 @@ func WithWork(w Work) {
 }
 
 func main() {
-	_, err := wool.InitTracer()
-	if err != nil {
-		panic(err)
-
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 

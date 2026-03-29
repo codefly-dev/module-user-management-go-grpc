@@ -3,222 +3,207 @@ package business
 import (
 	"backend/pkg/gen"
 	"context"
-	"github.com/codefly-dev/core/wool"
-	"slices"
 
+	"github.com/codefly-dev/core/wool"
 	"github.com/google/uuid"
 )
 
-type Status string
-
-func (s *Service) SetStore(store Store) {
-	s.store = store
-}
-
-const (
-	Active  Status = "active"
-	Pending Status = "pending"
-)
-
-const DefaultOrganizationName = "My Organization"
-
-const AdminTeamName = "Administrators"
-
 type Service struct {
-	store Store
+	store        Store
+	hasher       KeyHasher
+	tokenSigner  TokenSigner
+	audit        AuditEmitter
+	entitlements EntitlementChecker
+	features     FeatureChecker
 }
 
 func NewService(store Store) (*Service, error) {
 	return &Service{store: store}, nil
 }
 
-type RegisterUserInput struct {
-	Email        string
-	SignupAuthId string
+func (s *Service) SetHasher(h KeyHasher) {
+	s.hasher = h
 }
 
-// RegisterUser creates a new user with a new organization
-// Input is the AuthID of the user that we get from the context
-func (s *Service) RegisterUser(ctx context.Context, input *RegisterUserInput) (*gen.RegisterUserResponse, error) {
+func (s *Service) SetTokenSigner(t TokenSigner) {
+	s.tokenSigner = t
+}
+
+func (s *Service) SetAuditEmitter(a AuditEmitter) {
+	s.audit = a
+}
+
+func (s *Service) SetEntitlementChecker(e EntitlementChecker) {
+	s.entitlements = e
+}
+
+func (s *Service) SetFeatureChecker(f FeatureChecker) {
+	s.features = f
+}
+
+func (s *Service) SetStore(store Store) {
+	s.store = store
+}
+
+func (s *Service) Store() Store {
+	return s.store
+}
+
+// RegisterUser creates a new user with identity and a default personal organization.
+func (s *Service) RegisterUser(ctx context.Context, input *gen.RegisterUserRequest) (*gen.RegisterUserResponse, error) {
 	w := wool.Get(ctx).In("RegisterUser")
 
-	// If already exists, fails
-	if u, err := s.store.GetUserByAuthId(ctx, input.SignupAuthId); err != nil {
-		return nil, w.Wrapf(err, "error getting user")
+	// Check if identity already exists
+	if u, err := s.store.GetUserByIdentity(ctx, input.Identity); err != nil {
+		return nil, w.Wrapf(err, "error checking existing user")
 	} else if u != nil {
-		return nil, w.NewError("user already exists: %s", input.Email)
+		return nil, w.NewError("user already exists with this identity")
 	}
+
+	userID := uuid.New().String()
+	identityID := uuid.New().String()
 
 	user := &gen.User{
-		Id:    uuid.New().String(),
-		Email: input.Email,
-	}
-	// Invitation only
-	if slices.Contains(invited, user.Email) {
-		user.Status = string(Active)
-	} else {
-		user.Status = string(Pending)
+		Uuid:         userID,
+		PrimaryEmail: input.PrimaryEmail,
+		Status:       gen.UserStatus_USER_STATUS_ACTIVE,
+		Profile:      input.Profile,
 	}
 
-	// Create organization
+	identity := input.Identity
+	identity.Uuid = identityID
+	identity.UserUuid = userID
+	if identity.ProviderEmail == "" {
+		identity.ProviderEmail = input.PrimaryEmail
+	}
+
+	// RegisterUser already uses its own transaction for user+identity
+	if err := s.store.RegisterUser(ctx, user, identity); err != nil {
+		return nil, w.Wrapf(err, "cannot register user")
+	}
+
+	// Create a default personal organization
+	orgID := uuid.New().String()
 	org := &gen.Organization{
-		Id:   uuid.New().String(),
-		Name: DefaultOrganizationName,
+		Id:      orgID,
+		Name:    "Personal",
+		Slug:    "personal-" + userID[:8],
+		OwnerId: userID,
+	}
+	if err := s.store.CreateOrganization(ctx, org); err != nil {
+		return nil, w.Wrapf(err, "cannot create default organization")
 	}
 
-	adminTeam := &gen.Team{
-		Id:   uuid.New().String(),
-		Name: AdminTeamName,
-	}
-
-	adminRole := &gen.Role{
-		Id:   uuid.New().String(),
-		Name: "Admin",
-	}
-
-	// Define admin permissions
-	adminPermissions := []*gen.Permission{
-		{Id: uuid.New().String(), Name: "manage_users", Resource: "*", Access: "write"},
-		{Id: uuid.New().String(), Name: "manage_teams", Resource: "*", Access: "write"},
-		{Id: uuid.New().String(), Name: "manage_organization", Resource: "*", Access: "write"},
-		// Add more permissions as needed
-	}
-
-	err := s.store.RunInTransaction(ctx, func(ctx context.Context) error {
-
-		// Create admin role
-		if err := s.store.CreateRole(ctx, adminRole); err != nil {
-			return w.Wrapf(err, "cannot create admin role")
-		}
-
-		// Assign permissions to admin role
-		for _, perm := range adminPermissions {
-			if err := s.store.CreatePermission(ctx, perm); err != nil {
-				return w.Wrapf(err, "cannot create permission")
-			}
-			if err := s.store.AssignPermissionToRole(ctx, adminRole.Id, perm.Id); err != nil {
-				return w.Wrapf(err, "cannot assign permission to role")
-			}
-		}
-
-		// Create user
-		if err := s.store.CreateUser(ctx, user); err != nil {
-			return w.Wrapf(err, "cannot create user")
-		}
-
-		// Link user to auth id
-		if err := s.store.LinkUserWithAuth(ctx, user.Id, input.SignupAuthId); err != nil {
-			return w.Wrapf(err, "cannot link user with auth id")
-		}
-
-		// Create organization
-		if err := s.store.CreateOrganization(ctx, org); err != nil {
-			return w.Wrapf(err, "cannot create organization")
-		}
-
-		// Add user to organization
-		if err := s.store.AddUserToOrganization(ctx, org.Id, user.Id, adminRole.Id); err != nil {
-			return w.Wrapf(err, "cannot add user to organization")
-		}
-
-		// Create admin team
-		if err := s.store.CreateTeam(ctx, org.Id, adminTeam); err != nil {
-			return w.Wrapf(err, "cannot create admin team")
-		}
-
-		// Add user to admin team with admin role
-		if err := s.store.AddUserToTeam(ctx, adminTeam.Id, user.Id, adminRole.Id); err != nil {
-			return w.Wrapf(err, "cannot add user to admin team")
-		}
-		return nil
-	})
+	// Assign admin role to user in their org
+	roles, err := s.store.ListRoles(ctx, "")
 	if err != nil {
-		return nil, w.Wrapf(err, "error registrating user transaction")
+		return nil, w.Wrapf(err, "cannot list roles")
 	}
-	return &gen.RegisterUserResponse{User: user, Organization: org}, nil
+	for _, role := range roles {
+		if role.Name == "admin" && role.BuiltIn {
+			assignment := &gen.RoleAssignment{
+				Id:          uuid.New().String(),
+				SubjectId:   userID,
+				SubjectKind: gen.SubjectKind_SUBJECT_KIND_USER,
+				RoleId:      role.Id,
+				OrgId:       orgID,
+			}
+			if err := s.store.AssignRole(ctx, assignment); err != nil {
+				return nil, w.Wrapf(err, "cannot assign admin role")
+			}
+			break
+		}
+	}
+
+	s.emit(ctx, userID, "user", "user.registered", "user", userID, orgID)
+
+	return &gen.RegisterUserResponse{User: user, Identity: identity}, nil
 }
 
-func (s *Service) GetUserByAuthId(ctx context.Context, id string) (*gen.User, error) {
-	return s.store.GetUserByAuthId(ctx, id)
+// CheckPermission checks if a subject has permission to perform an action on a resource.
+func (s *Service) CheckPermission(ctx context.Context, req *gen.CheckPermissionRequest) (*gen.CheckPermissionResponse, error) {
+	allowed, reason, err := s.store.CheckPermission(
+		ctx, req.SubjectId, req.SubjectKind,
+		req.Resource, req.Action, req.OrgId, req.Scope,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &gen.CheckPermissionResponse{Allowed: allowed, Reason: reason}, nil
 }
 
-func (s *Service) GetUserById(ctx context.Context, userId string) (*gen.User, error) {
-	return s.store.GetUserById(ctx, userId)
+// ResolveIdentity maps an auth provider ID to internal user/org/roles.
+func (s *Service) ResolveIdentity(ctx context.Context, req *gen.ResolveIdentityRequest) (*gen.ResolveIdentityResponse, error) {
+	userID, orgID, roles, found, err := s.store.ResolveIdentity(ctx, req.Provider, req.ProviderId)
+	if err != nil {
+		return nil, err
+	}
+	return &gen.ResolveIdentityResponse{
+		UserId: userID,
+		OrgId:  orgID,
+		Roles:  roles,
+		Found:  found,
+	}, nil
 }
 
-func (s *Service) CreateUser(ctx context.Context, guest *gen.User) error {
-	return s.store.CreateUser(ctx, guest)
+// CreateOrganization creates a new org with the requesting user as owner.
+func (s *Service) CreateOrganization(ctx context.Context, ownerID string, req *gen.CreateOrganizationRequest) (*gen.CreateOrganizationResponse, error) {
+	org := &gen.Organization{
+		Id:      uuid.New().String(),
+		Name:    req.Name,
+		Slug:    req.Slug,
+		OwnerId: ownerID,
+	}
+	if err := s.store.CreateOrganization(ctx, org); err != nil {
+		return nil, err
+	}
+	s.emit(ctx, ownerID, "user", "org.created", "organization", org.Id, org.Id)
+	return &gen.CreateOrganizationResponse{Organization: org}, nil
 }
 
-//	func (s *Service) GetOrganization(ctx context.Context, u *gen.User) (*gen.Organization, error) {
-//		return s.store.GetOrganization(ctx, u)
-//	}
-//
-// // CreateOrganization creates an organization for the user
-//
-//	func (s *Service) CreateOrganization(ctx context.Context, org *gen.Organization) error {
-//		w := wool.Get(ctx).In("CreateOrganization")
-//		err := s.store.CreateOrganization(ctx, org)
-//		if err != nil {
-//			return fmt.Errorf("error creating organization: %w", err)
-//		}
-//		return nil
-//	}
-//
-//	func (s *Service) DeleteUser(ctx context.Context, id string) error {
-//		w := wool.Get(ctx).In("DeleteOwner")
-//		u, err := s.GetUserByAuthId(ctx, id)
-//		if err != nil {
-//			return w.Wrapf(err, "error getting user")
-//		}
-//		if u == nil {
-//			return w.NewError("not found: user")
-//		}
-//		org, err := s.GetOrganization(ctx, u)
-//		if err != nil {
-//			return w.Wrapf(err, "can't get organization for owner")
-//		}
-//		if org != nil {
-//			err = s.DeleteOrganization(ctx, org)
-//			if err != nil {
-//				return w.Wrapf(err, "can't delete organization")
-//			}
-//		}
-//		return s.store.DeleteUser(ctx, u)
-//	}
-//
-//	func (s *Service) DeleteOrganization(ctx context.Context, org *gen.Organization) error {
-//		w := wool.Get(ctx).In("DeleteOrganization")
-//		// Delete teams for this organizations
-//		teams, err := s.GetTeams(ctx, org)
-//		if err != nil {
-//			return w.Wrapf(err, "can't get teams for organization")
-//		}
-//		for _, team := range teams {
-//			err = s.DeleteTeam(ctx, team)
-//			if err != nil {
-//				return w.Wrapf(err, "can't delete team")
-//			}
-//		}
-//		return s.store.DeleteOrganization(ctx, org)
-//	}
-//
-//	func (s *Service) GetTeams(ctx context.Context, org *gen.Organization) ([]*gen.Team, error) {
-//		return s.store.GetTeams(ctx, org)
-//
-// }
-//
-//	func (s *Service) CreateTeam(ctx context.Context, org *gen.Organization, team *gen.Team) error {
-//		return s.store.CreateTeam(ctx, org, team)
-//	}
-//
-//	func (s *Service) DeleteTeam(ctx context.Context, team *gen.Team) error {
-//		return s.store.DeleteTeam(ctx, team)
-//	}
-//
-//	func (s *Service) AddUserToTeam(ctx context.Context, team *gen.Team, user *gen.User) error {
-//		return s.store.AddUserToTeam(ctx, team, user)
-//	}
-//
-// Right now hardcode email of invited users
-var invited = []string{"antoine.toussaint@codefly.ai"}
+// CreateTeam creates a new team within an org.
+func (s *Service) CreateTeam(ctx context.Context, req *gen.CreateTeamRequest) (*gen.CreateTeamResponse, error) {
+	team := &gen.Team{
+		Id:          uuid.New().String(),
+		OrgId:       req.OrgId,
+		Name:        req.Name,
+		Description: req.Description,
+	}
+	if err := s.store.CreateTeam(ctx, team); err != nil {
+		return nil, err
+	}
+	return &gen.CreateTeamResponse{Team: team}, nil
+}
+
+// CreateRole creates a new custom role.
+func (s *Service) CreateRole(ctx context.Context, req *gen.CreateRoleRequest) (*gen.CreateRoleResponse, error) {
+	role := &gen.Role{
+		Id:          uuid.New().String(),
+		Name:        req.Name,
+		Description: req.Description,
+		Permissions: req.Permissions,
+		BuiltIn:     false,
+		OrgId:       req.OrgId,
+	}
+	if err := s.store.CreateRole(ctx, role); err != nil {
+		return nil, err
+	}
+	return &gen.CreateRoleResponse{Role: role}, nil
+}
+
+// AssignRole assigns a role to a user or team.
+func (s *Service) AssignRole(ctx context.Context, req *gen.AssignRoleRequest) (*gen.AssignRoleResponse, error) {
+	assignment := &gen.RoleAssignment{
+		Id:          uuid.New().String(),
+		SubjectId:   req.SubjectId,
+		SubjectKind: req.SubjectKind,
+		RoleId:      req.RoleId,
+		OrgId:       req.OrgId,
+		Scope:       req.Scope,
+	}
+	if err := s.store.AssignRole(ctx, assignment); err != nil {
+		return nil, err
+	}
+	s.emit(ctx, req.SubjectId, "user", "role.assigned", "role", req.RoleId, req.OrgId)
+	return &gen.AssignRoleResponse{Assignment: assignment}, nil
+}
